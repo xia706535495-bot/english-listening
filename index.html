@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF9F6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='42' fill='none' stroke='%232D5A3D' stroke-width='8'/%3E%3Cpolygon points='40,32 68,50 40,68' fill='%232D5A3D'/%3E%3C/svg%3E">
+<title>每日听力</title>
+<style>
+  /* ===== 设计 token ===== */
+  :root {
+    --bg: #FAF9F6;
+    --bg-soft: #F1EFE9;
+    --ink: #1A1A1A;
+    --ink-soft: #6B6B6B;
+    --ink-faint: #A8A8A8;
+    --line: #E2DFD8;
+    --accent: #2D5A3D;
+    --accent-soft: #E4EDE6;
+    --warn: #B85C3A;
+    --radius: 10px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.04);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== 顶部栏 ===== */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: max(env(safe-area-inset-top), 16px) 20px 8px;
+  }
+  .topbar .date {
+    font-size: 14px;
+    color: var(--ink-soft);
+    letter-spacing: 0.3px;
+  }
+  .icon-btn {
+    width: 40px; height: 40px;
+    border: none; background: transparent;
+    color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  .icon-btn:active { background: var(--bg-soft); }
+  .icon-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ===== 首页主区 ===== */
+  .home {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 24px 40px;
+    min-height: calc(100vh - 60px - env(safe-area-inset-top));
+    min-height: calc(100dvh - 60px - env(safe-area-inset-top));
+  }
+
+  /* 圆圈播放键 + 进度环 */
+  .circle-wrap {
+    position: relative;
+    width: 240px; height: 240px;
+    margin: 30px 0 24px;
+  }
+  .circle-wrap svg.ring {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+  .circle-wrap .ring-bg {
+    fill: none;
+    stroke: var(--bg-soft);
+    stroke-width: 8;
+  }
+  .circle-wrap .ring-fg {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 660;
+    stroke-dashoffset: 660;
+    transition: stroke-dashoffset 0.4s ease;
+  }
+  .play-btn {
+    position: absolute;
+    inset: 20px;
+    border-radius: 50%;
+    border: none;
+    background: var(--ink);
+    color: var(--bg);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease, background 0.2s;
+    box-shadow: var(--shadow);
+  }
+  .play-btn:active { transform: scale(0.96); }
+  .play-btn svg { width: 48px; height: 48px; fill: currentColor; }
+  .play-btn.playing { background: var(--accent); }
+
+  /* 今日时长 */
+  .today-stats {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .today-stats .num {
+    font-size: 32px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+  }
+  .today-stats .num .unit {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin-left: 4px;
+  }
+  .today-stats .label {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+  .goal-done { color: var(--accent); }
+
+  /* 当前播放内容卡片 */
+  .now-playing {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-soft);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .now-playing .np-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .now-playing .np-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin-bottom: 6px;
+  }
+  .now-playing .np-meta {
+    font-size: 13px;
+    color: var(--ink-soft);
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .tag.news { background: #EAE3D8; color: #7A5A2E; }
+  .tag.daily { background: #E4EDE6; color: #2D5A3D; }
+  .tag.drama { background: #E8E0E8; color: #6B3A6B; }
+
+  /* 进度条（当前音频） */
+  .progress-wrap {
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 12px;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--ink);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.2s linear;
+  }
+  .progress-times {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 控制按钮行 */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    margin-top: 8px;
+  }
+  .ctrl {
+    background: none; border: none;
+    color: var(--ink);
+    cursor: pointer;
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+  }
+  .ctrl:active { background: var(--bg-soft); }
+  .ctrl svg { width: 26px; height: 26px; fill: currentColor; }
+  .ctrl.speed {
+    width: auto; height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 下一段预告 */
+  .up-next {
+    margin-top: 28px;
+    font-size: 13px;
+    color: var(--ink-faint);
+    text-align: center;
+    max-width: 320px;
+  }
+
+  /* ===== 字幕面板 ===== */
+  .transcript {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 20px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    font-size: 15px;
+    line-height: 1.7;
+    display: none;
+  }
+  .transcript.show { display: block; }
+  .transcript .t-en { margin-bottom: 10px; }
+  .transcript .t-zh { color: var(--ink-soft); font-size: 14px; }
+  .transcript .t-label {
+    font-size: 11px; color: var(--ink-faint);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  /* ===== 功能抽屉 ===== */
+  .drawer-mask {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.3);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+    z-index: 40;
+  }
+  .drawer-mask.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 85%; max-width: 340px;
+    background: var(--bg);
+    z-index: 50;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+    padding: max(env(safe-area-inset-top), 20px) 20px calc(env(safe-area-inset-bottom) + 20px);
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer h3 {
+    font-size: 13px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin: 24px 0 10px;
+    font-weight: 600;
+  }
+  .drawer h3:first-child { margin-top: 0; }
+  .drawer .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .drawer .row:last-child { border-bottom: none; }
+  .drawer .row .label { font-size: 15px; }
+  .drawer .row .value {
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .drawer .row .value.active { color: var(--accent); font-weight: 600; }
+
+  /* ===== 全屏视图（每周总结/离线管理） ===== */
+  .view {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 60;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+    padding: max(env(safe-area-inset-top), 16px) 20px calc(env(safe-area-inset-bottom) + 20px);
+  }
+  .view.open { transform: translateX(0); }
+  .view-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 20px;
+  }
+  .view-header .back {
+    background: none; border: none;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  .view-header .back:active { background: var(--bg-soft); }
+  .view-header .back svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .view-header h2 { font-size: 18px; margin: 0; font-weight: 600; }
+
+  /* 每周总结 */
+  .weekly-hero {
+    text-align: center;
+    padding: 30px 0 20px;
+  }
+  .weekly-hero .big {
+    font-size: 56px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  .weekly-hero .big .unit { font-size: 20px; font-weight: 400; color: var(--ink-soft); }
+  .weekly-hero .sub { color: var(--ink-soft); margin-top: 8px; font-size: 14px; }
+  .weekly-hero .streak {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 6px 14px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .section-title {
+    font-size: 13px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 28px 0 12px;
+    font-weight: 600;
+  }
+
+  /* 主题分布条 */
+  .topic-bar {
+    display: flex;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .topic-bar .seg { height: 100%; }
+  .topic-bar .seg.daily { background: #2D5A3D; }
+  .topic-bar .seg.news { background: #B8923A; }
+  .topic-bar .seg.drama { background: #6B3A6B; }
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    font-size: 12px; color: var(--ink-soft);
+  }
+  .legend .dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  /* 每日柱子 */
+  .days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    align-items: end;
+    height: 100px;
+    margin-top: 8px;
+  }
+  .days-grid .day-col {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .days-grid .bar {
+    width: 100%;
+    max-width: 24px;
+    background: var(--accent-soft);
+    border-radius: 3px 3px 0 0;
+    min-height: 2px;
+    position: relative;
+  }
+  .days-grid .bar.met { background: var(--accent); }
+  .days-grid .day-label {
+    font-size: 10px;
+    color: var(--ink-faint);
+  }
+
+  /* 内容列表 */
+  .episode-item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .episode-item:last-child { border-bottom: none; }
+  .episode-item .ep-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .episode-item .ep-meta {
+    font-size: 12px;
+    color: var(--ink-faint);
+    display: flex; gap: 10px;
+  }
+
+  /* 离线管理 */
+  .offline-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .offline-card .row {
+    display: flex; justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+  }
+  .offline-card .row .k { font-size: 14px; color: var(--ink-soft); }
+  .offline-card .row .v { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .btn {
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    padding: 10px 18px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .btn:active { opacity: 0.85; }
+  .btn.ghost {
+    background: transparent;
+    color: var(--warn);
+    border: 1px solid var(--line);
+  }
+
+  /* toast */
+  .toast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: var(--bg);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 加载状态 */
+  .loading {
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: 13px;
+    padding: 20px;
+  }
+
+  /* 桌面端微调 */
+  @media (min-width: 768px) {
+    .home { padding-top: 60px; }
+    .circle-wrap { width: 280px; height: 280px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 顶部栏 -->
+<div class="topbar">
+  <div class="date" id="topDate">--</div>
+  <button class="icon-btn" id="openDrawer" aria-label="设置">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</div>
+
+<!-- 首页 -->
+<div class="home" id="homeView">
+  <div class="circle-wrap">
+    <svg class="ring" viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="105"/>
+      <circle class="ring-fg" id="ringFg" cx="110" cy="110" r="105"/>
+    </svg>
+    <button class="play-btn" id="playBtn" aria-label="播放/暂停">
+      <svg id="playIcon" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg>
+    </button>
+  </div>
+
+  <div class="today-stats">
+    <div class="num"><span id="todaySeconds">0</span><span class="unit" id="todayUnit">分钟</span></div>
+    <div class="label" id="todayLabel">今日目标 30 分钟</div>
+  </div>
+
+  <div class="now-playing" id="nowPlayingCard" style="display:none">
+    <div class="np-label">正在播放</div>
+    <div class="np-title" id="npTitle">--</div>
+    <div class="np-meta">
+      <span class="tag" id="npTag">--</span>
+      <span id="npDuration">--</span>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap" style="display:none">
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-times">
+      <span id="curTime">0:00</span>
+      <span id="durTime">0:00</span>
+    </div>
+  </div>
+
+  <div class="controls" id="controlsRow" style="visibility:hidden">
+    <button class="ctrl" id="prevBtn" aria-label="上一段">
+      <svg viewBox="0 0 24 24"><polygon points="19,20 9,12 19,4"/><rect x="5" y="4" width="2" height="16"/></svg>
+    </button>
+    <button class="ctrl speed" id="speedBtn">1.0x</button>
+    <button class="ctrl" id="nextBtn" aria-label="下一段">
+      <svg viewBox="0 0 24 24"><polygon points="5,4 15,12 5,20"/><rect x="17" y="4" width="2" height="16"/></svg>
+    </button>
+  </div>
+
+  <div class="up-next" id="upNext"></div>
+
+  <div class="transcript" id="transcript">
+    <div class="t-label">Transcript</div>
+    <div class="t-en" id="tEn"></div>
+    <div class="t-zh" id="tZh"></div>
+  </div>
+</div>
+
+<!-- 功能抽屉 -->
+<div class="drawer-mask" id="drawerMask"></div>
+<aside class="drawer" id="drawer">
+  <h3>听力难度</h3>
+  <div class="row" data-setting="level" data-value="easy"><span class="label">初级</span><span class="value">A2</span></div>
+  <div class="row" data-setting="level" data-value="medium"><span class="label">中等</span><span class="value active">B1-B2</span></div>
+  <div class="row" data-setting="level" data-value="hard"><span class="label">进阶</span><span class="value">C1</span></div>
+
+  <h3>字幕显示</h3>
+  <div class="row" data-setting="subtitle" data-value="off"><span class="label">关闭</span><span class="value"></span></div>
+  <div class="row" data-setting="subtitle" data-value="en"><span class="label">仅英文</span><span class="value"></span></div>
+  <div class="row" data-setting="subtitle" data-value="bilingual"><span class="label">双语</span><span class="value active"></span></div>
+
+  <h3>主题偏好</h3>
+  <div class="row" data-setting="topic" data-value="daily"><span class="label">日常交流</span><span class="value active">已选</span></div>
+  <div class="row" data-setting="topic" data-value="news"><span class="label">时事新闻</span><span class="value active">已选</span></div>
+  <div class="row" data-setting="topic" data-value="drama"><span class="label">美剧英剧精读</span><span class="value active">已选</span></div>
+
+  <h3>数据</h3>
+  <div class="row" id="openWeekly"><span class="label">每周总结</span><span class="value">›</span></div>
+  <div class="row" id="openOffline"><span class="label">离线下载管理</span><span class="value">›</span></div>
+  <div class="row" id="clearData"><span class="label" style="color:var(--warn)">清除全部数据</span><span class="value">›</span></div>
+</aside>
+
+<!-- 每周总结视图 -->
+<div class="view" id="weeklyView">
+  <div class="view-header">
+    <button class="back" data-close="weeklyView"><svg viewBox="0 0 24 24"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <h2>每周总结</h2>
+  </div>
+  <div id="weeklyContent"></div>
+</div>
+
+<!-- 离线管理视图 -->
+<div class="view" id="offlineView">
+  <div class="view-header">
+    <button class="back" data-close="offlineView"><svg viewBox="0 0 24 24"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <h2>离线管理</h2>
+  </div>
+  <div id="offlineContent"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<audio id="audioEl" preload="none"></audio>
+
+<script>
+/* ============================================================
+   每日听力 - 核心逻辑
+   ============================================================ */
+(function(){
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const audio = $('audioEl');
+
+  /* ---------- 常量 ---------- */
+  const DAILY_GOAL_SEC = 30 * 60; // 30 分钟
+  const RING_CIRC = 2 * Math.PI * 105; // 220 viewBox, r=105
+
+  /* RSS 源（通过 rss2json 代理避免跨域） */
+  const RSS_SOURCES = [
+    { topic: 'news', name: 'VOA Learning English', url: 'https://learningenglish.voanews.com/z/3529/rss.xml' },
+    { topic: 'drama', name: 'BBC 6 Minute English', url: 'https://downloads.bbc.co.uk/podcasts/learningenglish/6minenglish/rss.xml' },
+    { topic: 'daily', name: 'ESLPod', url: 'https://www.eslpod.com/feed/' }
+  ];
+
+  /* 内置 fallback 内容（RSS 拉取失败时用） */
+  const FALLBACK_EPISODES = [
+    {
+      id: 'fb1', topic: 'daily', title: 'Ordering Food at a Restaurant (Demo)',
+      audio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+      duration: 0, en: 'Welcome. This is a demo episode. In real use, audio from VOA, BBC and ESLPod will load here automatically.', zh: '欢迎。这是演示条目。真实使用时，VOA、BBC 和 ESLPod 的音频会自动加载到这里。'
+    },
+    {
+      id: 'fb2', topic: 'news', title: 'World News in Slow English (Demo)',
+      audio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+      duration: 0, en: 'This is placeholder news content. Connect to the internet to load real episodes.', zh: '这是占位新闻内容。联网后会自动加载真实节目。'
+    },
+    {
+      id: 'fb3', topic: 'drama', title: 'Friendship Dialogue — Script Reading (Demo)',
+      audio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+      duration: 0, en: 'A sample dialogue transcript. Real TV show clips will appear here once the feed loads.', zh: '示例对白文字稿。订阅源加载后，真实的剧集片段会出现在这里。'
+    }
+  ];
+
+  /* ---------- 状态 ---------- */
+  let state = {
+    settings: { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','drama'] },
+    playlist: [],          // 今日播放列表
+    currentIndex: 0,
+    history: {},           // { 'YYYY-MM-DD': { seconds, items: [{id, sec, done}] } }
+    offline: false,
+    loadedFromFeed: false
+  };
+
+  /* ---------- 工具 ---------- */
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function fmtTime(sec) {
+    if (!sec || isNaN(sec)) return '0:00';
+    sec = Math.floor(sec);
+    const m = Math.floor(sec/60), s = sec%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function fmtMin(sec) {
+    return Math.round(sec/60);
+  }
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(()=> t.classList.remove('show'), 2000);
+  }
+  function loadLS(key, def) {
+    try { const v = localStorage.getItem('hl_'+key); return v ? JSON.parse(v) : def; }
+    catch(e) { return def; }
+  }
+  function saveLS(key, val) {
+    try { localStorage.setItem('hl_'+key, JSON.stringify(val)); } catch(e){}
+  }
+
+  /* ---------- 初始化 ---------- */
+  function init() {
+    state.settings = Object.assign(state.settings, loadLS('settings', {}));
+    state.history = loadLS('history', {});
+
+    // 日期
+    const now = new Date();
+    const days = ['周日','周一','周二','周三','周四','周五','周六'];
+    $('topDate').textContent = (now.getMonth()+1)+'月'+now.getDate()+'日 '+days[now.getDay()];
+
+    // 加载播放列表
+    loadPlaylist().then(()=>{
+      renderNowPlaying();
+      renderToday();
+    });
+
+    // 绑定事件
+    bindEvents();
+
+    // 注册 Service Worker（离线缓存）
+    if ('serviceWorker' in navigator && location.protocol === 'https:' || location.hostname === 'localhost') {
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    }
+
+    // 网络状态
+    window.addEventListener('online', ()=>{ state.offline = false; toast('网络已连接，正在同步'); syncHistory(); });
+    window.addEventListener('offline', ()=>{ state.offline = true; toast('已离线，可继续收听'); });
+  }
+
+  /* ---------- 播放列表加载 ---------- */
+  async function loadPlaylist() {
+    // 先尝试从 RSS 拉
+    try {
+      const eps = await fetchFromFeeds();
+      if (eps.length >= 3) {
+        state.playlist = eps;
+        state.loadedFromFeed = true;
+        saveLS('playlist_cache', { date: todayStr(), items: eps });
+        return;
+      }
+    } catch(e) { console.warn('feed fetch failed', e); }
+
+    // fallback：用缓存或内置
+    const cached = loadLS('playlist_cache', null);
+    if (cached && cached.date === todayStr()) {
+      state.playlist = cached.items;
+    } else {
+      state.playlist = FALLBACK_EPISODES;
+    }
+  }
+
+  async function fetchFromFeeds() {
+    const items = [];
+    for (const src of RSS_SOURCES) {
+      try {
+        const api = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(src.url);
+        const resp = await fetch(api);
+        const data = await resp.json();
+        if (data.status === 'ok' && data.items && data.items.length) {
+          // 取最新 2 条
+          for (let i = 0; i < Math.min(2, data.items.length); i++) {
+            const it = data.items[i];
+            // 找音频
+            let audioUrl = '';
+            if (it.enclosure && it.enclosure.link) audioUrl = it.enclosure.link;
+            else if (it.guid && it.guid.endsWith('.mp3')) audioUrl = it.guid;
+            if (!audioUrl) continue;
+
+            // 提取简介作为文字稿
+            const desc = (it.description || '').replace(/<[^>]+>/g, '').trim();
+            items.push({
+              id: src.topic + '_' + i + '_' + Date.now(),
+              topic: src.topic,
+              title: it.title || src.name + ' Episode',
+              audio: audioUrl,
+              duration: 0,
+              en: desc.substring(0, 600),
+              zh: ''
+            });
+          }
+        }
+      } catch(e) { console.warn(src.name, 'failed', e); }
+    }
+    return items;
+  }
+
+  /* ---------- 播放控制 ---------- */
+  function togglePlay() {
+    if (!state.playlist.length) { toast('正在加载内容...'); return; }
+    if (audio.paused) {
+      audio.play().catch(()=> toast('播放失败，请检查网络'));
+    } else {
+      audio.pause();
+    }
+  }
+
+  function loadEpisode(idx) {
+    const ep = state.playlist[idx];
+    if (!ep) return;
+    state.currentIndex = idx;
+    audio.src = ep.audio;
+    audio.playbackRate = state.settings.speed;
+    audio.load();
+    renderNowPlaying();
+    renderTranscript();
+    audio.play().catch(()=>{});
+  }
+
+  function next() {
+    const nextIdx = (state.currentIndex + 1) % state.playlist.length;
+    loadEpisode(nextIdx);
+  }
+  function prev() {
+    const prevIdx = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
+    loadEpisode(prevIdx);
+  }
+
+  function cycleSpeed() {
+    const speeds = [0.75, 1.0, 1.25];
+    const cur = speeds.indexOf(state.settings.speed);
+    state.settings.speed = speeds[(cur+1) % speeds.length];
+    audio.playbackRate = state.settings.speed;
+    $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'') + 'x';
+    saveLS('settings', state.settings);
+  }
+
+  /* ---------- 渲染 ---------- */
+  function renderNowPlaying() {
+    const ep = state.playlist[state.currentIndex];
+    if (!ep) { $('nowPlayingCard').style.display='none'; $('controlsRow').style.visibility='hidden'; return; }
+    $('nowPlayingCard').style.display='block';
+    $('controlsRow').style.visibility='visible';
+    $('npTitle').textContent = ep.title;
+    const tag = $('npTag');
+    tag.textContent = ep.topic === 'daily' ? '日常' : ep.topic === 'news' ? '新闻' : '影视';
+    tag.className = 'tag ' + ep.topic;
+    $('progressWrap').style.display = 'block';
+
+    // 下一段预告
+    const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
+    if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title.substring(0, 40);
+  }
+
+  function renderTranscript() {
+    const ep = state.playlist[state.currentIndex];
+    const sub = state.settings.subtitle;
+    const box = $('transcript');
+    if (sub === 'off' || !ep) { box.classList.remove('show'); return; }
+    box.classList.add('show');
+    $('tEn').style.display = (sub === 'en' || sub === 'bilingual') ? 'block' : 'none';
+    $('tZh').style.display = (sub === 'zh' || sub === 'bilingual') ? 'block' : 'none';
+    $('tEn').textContent = ep.en || '（暂无文字稿）';
+    $('tZh').textContent = ep.zh || '';
+  }
+
+  function renderToday() {
+    const today = state.history[todayStr()] || { seconds: 0, items: [] };
+    const sec = today.seconds || 0;
+    const min = fmtMin(sec);
+    $('todaySeconds').textContent = min;
+    const pct = Math.min(1, sec / DAILY_GOAL_SEC);
+    $('ringFg').style.strokeDashoffset = RING_CIRC * (1 - pct);
+    if (sec >= DAILY_GOAL_SEC) {
+      $('todayLabel').innerHTML = '<span class="goal-done">今日目标已达成</span> · 已听 ' + min + ' 分钟，继续保持';
+    } else {
+      const remain = Math.max(0, Math.round((DAILY_GOAL_SEC - sec)/60));
+      $('todayLabel').textContent = '今日目标 30 分钟 · 还差 ' + remain + ' 分钟';
+    }
+  }
+
+  /* ---------- 播放记录 ---------- */
+  function tickPlayback() {
+    if (audio.paused || !audio.currentTime) return;
+    const today = todayStr();
+    if (!state.history[today]) state.history[today] = { seconds: 0, items: [] };
+    state.history[today].seconds += 1;
+    // 每分钟持久化一次
+    if (Math.floor(state.history[today].seconds) % 30 === 0) {
+      saveLS('history', state.history);
+    }
+    renderToday();
+  }
+
+  function syncHistory() {
+    // 有网时把本地历史归档（纯本地应用，这里只是确认写入）
+    saveLS('history', state.history);
+    // 尝试预缓存今日音频
+    state.playlist.forEach(ep => {
+      if (ep.audio && caches) {
+        caches.open('hl_audio').then(c => c.match(ep.audio)).then(m => {
+          if (!m) fetch(ep.audio, {mode:'no-cors'}).then(r => caches.open('hl_audio').then(c => c.put(ep.audio, r))).catch(()=>{});
+        });
+      }
+    });
+  }
+
+  /* ---------- 每周总结 ---------- */
+  function renderWeekly() {
+    const now = new Date();
+    const day = now.getDay() || 7; // 周日=7
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - day + 1);
+    monday.setHours(0,0,0,0);
+
+    let totalSec = 0;
+    let dailySecs = [0,0,0,0,0,0,0];
+    let topicSecs = { daily: 0, news: 0, drama: 0 };
+    let episodeList = [];
+    let metDays = 0;
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const rec = state.history[key];
+      if (rec) {
+        dailySecs[i] = rec.seconds || 0;
+        totalSec += rec.seconds || 0;
+        if ((rec.seconds||0) >= DAILY_GOAL_SEC) metDays++;
+        (rec.items||[]).forEach(it => episodeList.push({...it, date: key}));
+      }
+    }
+
+    // 主题秒数（粗略：按播放列表比例分摊）
+    state.playlist.forEach(ep => {
+      if (topicSecs[ep.topic] !== undefined) topicSecs[ep.topic] += 300; // 估算每段5分钟
+    });
+    const topicTotal = topicSecs.daily + topicSecs.news + topicSecs.drama || 1;
+
+    const totalMin = fmtMin(totalSec);
+    const goalPct = Math.round(totalSec / (DAILY_GOAL_SEC * 7) * 100);
+
+    const days = ['一','二','三','四','五','六','日'];
+    const maxBar = Math.max(...dailySecs, DAILY_GOAL_SEC);
+
+    let html = `
+      <div class="weekly-hero">
+        <div class="big">${totalMin}<span class="unit"> 分钟</span></div>
+        <div class="sub">本周总听力时长 · 目标完成率 ${goalPct}%</div>
+        ${metDays > 0 ? `<div class="streak">${metDays} 天达成 30 分钟目标</div>` : '<div class="streak" style="background:var(--bg-soft);color:var(--ink-faint)">本周还未达成目标</div>'}
+      </div>
+
+      <div class="section-title">主题分布</div>
+      <div class="topic-bar">
+        <div class="seg daily" style="width:${topicSecs.daily/topicTotal*100}%"></div>
+        <div class="seg news" style="width:${topicSecs.news/topicTotal*100}%"></div>
+        <div class="seg drama" style="width:${topicSecs.drama/topicTotal*100}%"></div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#2D5A3D"></span>日常 ${fmtMin(topicSecs.daily)}分</span>
+        <span><span class="dot" style="background:#B8923A"></span>新闻 ${fmtMin(topicSecs.news)}分</span>
+        <span><span class="dot" style="background:#6B3A6B"></span>影视 ${fmtMin(topicSecs.drama)}分</span>
+      </div>
+
+      <div class="section-title">每日时长</div>
+      <div class="days-grid">
+    `;
+
+    for (let i = 0; i < 7; i++) {
+      const h = (dailySecs[i] / maxBar * 100).toFixed(1);
+      const met = dailySecs[i] >= DAILY_GOAL_SEC;
+      html += `<div class="day-col">
+        <div class="bar ${met?'met':''}" style="height:${h}%" title="${fmtMin(dailySecs[i])}分"></div>
+        <div class="day-label">${days[i]}</div>
+      </div>`;
+    }
+    html += '</div>';
+
+    if (episodeList.length) {
+      html += '<div class="section-title">听过的内容</div>';
+      episodeList.slice(0, 20).forEach(it => {
+        html += `<div class="episode-item">
+          <div class="ep-title">${it.title || '未命名'}</div>
+          <div class="ep-meta"><span>${it.date}</span><span>${fmtMin(it.sec||0)} 分钟</span></div>
+        </div>`;
+      });
+    } else {
+      html += '<div class="section-title">听过的内容</div><div class="loading">本周还没有播放记录</div>';
+    }
+
+    $('weeklyContent').innerHTML = html;
+  }
+
+  /* ---------- 离线管理 ---------- */
+  function renderOffline() {
+    const cacheCount = state.playlist.length;
+    const html = `
+      <div class="offline-card">
+        <div class="row"><span class="k">今日条目</span><span class="v">${cacheCount} 段</span></div>
+        <div class="row"><span class="k">已缓存</span><span class="v" id="cachedCount">检查中...</span></div>
+        <div class="row"><span class="k">网络状态</span><span class="v">${state.offline ? '离线' : '在线'}</span></div>
+      </div>
+      <button class="btn" id="btnCacheNow">一键缓存今日音频</button>
+      <button class="btn ghost" id="btnClearCache">清除离线缓存</button>
+      <div style="font-size:12px;color:var(--ink-faint);margin-top:16px;line-height:1.6">
+        首次联网收听后，音频会自动存入浏览器缓存。之后无网也能继续听。有网时播放记录会自动归档。
+      </div>
+    `;
+    $('offlineContent').innerHTML = html;
+
+    // 检查已缓存数量
+    if (window.caches) {
+      caches.open('hl_audio').then(c => c.keys()).then(keys => {
+        $('cachedCount').textContent = keys.length + ' 个文件';
+      }).catch(()=> $('cachedCount').textContent = '不可用');
+    } else {
+      $('cachedCount').textContent = '浏览器不支持';
+    }
+
+    $('btnCacheNow').onclick = () => {
+      let done = 0;
+      state.playlist.forEach(ep => {
+        fetch(ep.audio, {mode:'no-cors'})
+          .then(r => caches.open('hl_audio').then(c => c.put(ep.audio, r)))
+          .then(()=>{ done++; $('cachedCount').textContent = done + ' 个文件'; })
+          .catch(()=>{});
+      });
+      toast('开始缓存，请保持网络连接');
+    };
+
+    $('btnClearCache').onclick = () => {
+      if (confirm('确定清除所有离线音频缓存吗？')) {
+        caches.delete('hl_audio').then(()=>{ toast('已清除'); renderOffline(); });
+      }
+    };
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  function bindEvents() {
+    // 播放/暂停
+    $('playBtn').onclick = togglePlay;
+
+    // 音频事件
+    audio.addEventListener('play', ()=> {
+      $('playIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+      $('playBtn').classList.add('playing');
+    });
+    audio.addEventListener('pause', ()=> {
+      $('playIcon').innerHTML = '<polygon points="6,4 20,12 6,20"/>';
+      $('playBtn').classList.remove('playing');
+      // 保存进度
+      const ep = state.playlist[state.currentIndex];
+      if (ep) {
+        const today = todayStr();
+        if (!state.history[today]) state.history[today] = { seconds: 0, items: [] };
+        if (!state.history[today].items.find(i => i.id === ep.id)) {
+          state.history[today].items.push({ id: ep.id, title: ep.title, sec: 0, done: audio.ended });
+        }
+        saveLS('history', state.history);
+      }
+    });
+    audio.addEventListener('timeupdate', ()=> {
+      $('progressFill').style.width = (audio.currentTime / audio.duration * 100 || 0) + '%';
+      $('curTime').textContent = fmtTime(audio.currentTime);
+      $('durTime').textContent = fmtTime(audio.duration);
+      tickPlayback();
+    });
+    audio.addEventListener('ended', ()=> {
+      const ep = state.playlist[state.currentIndex];
+      if (ep) {
+        const today = todayStr();
+        const item = (state.history[today]?.items||[]).find(i => i.id === ep.id);
+        if (item) item.done = true;
+      }
+      next();
+    });
+    audio.addEventListener('error', ()=> {
+      // 音频加载失败，跳到下一段
+      setTimeout(next, 1500);
+    });
+
+    // 进度条点击
+    $('progressBar').onclick = (e) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = (e.clientX - rect.left) / rect.width;
+      if (audio.duration) audio.currentTime = pct * audio.duration;
+    };
+
+    // 控制
+    $('nextBtn').onclick = next;
+    $('prevBtn').onclick = prev;
+    $('speedBtn').onclick = cycleSpeed;
+    $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'') + 'x';
+
+    // 抽屉
+    $('openDrawer').onclick = () => { $('drawer').classList.add('open'); $('drawerMask').classList.add('open'); };
+    $('drawerMask').onclick = closeDrawer;
+    function closeDrawer() { $('drawer').classList.remove('open'); $('drawerMask').classList.remove('open'); }
+
+    // 设置项
+    document.querySelectorAll('.drawer .row[data-setting]').forEach(row => {
+      row.onclick = () => {
+        const key = row.dataset.setting;
+        const val = row.dataset.value;
+        if (key === 'level') {
+          state.settings.level = val;
+          document.querySelectorAll('.row[data-setting="level"] .value').forEach(v => v.classList.remove('active'));
+          row.querySelector('.value').classList.add('active');
+        } else if (key === 'subtitle') {
+          state.settings.subtitle = val;
+          document.querySelectorAll('.row[data-setting="subtitle"] .value').forEach(v => v.classList.remove('active'));
+          row.querySelector('.value').classList.add('active');
+          renderTranscript();
+        } else if (key === 'topic') {
+          const idx = state.settings.topics.indexOf(val);
+          if (idx >= 0) { state.settings.topics.splice(idx,1); row.querySelector('.value').textContent=''; }
+          else { state.settings.topics.push(val); row.querySelector('.value').textContent='已选'; row.querySelector('.value').classList.add('active'); }
+        }
+        saveLS('settings', state.settings);
+      };
+    });
+
+    // 初始化设置选中态
+    document.querySelectorAll('.row[data-setting="level"]').forEach(r => {
+      r.querySelector('.value').classList.toggle('active', r.dataset.value === state.settings.level);
+    });
+    document.querySelectorAll('.row[data-setting="subtitle"]').forEach(r => {
+      r.querySelector('.value').classList.toggle('active', r.dataset.value === state.settings.subtitle);
+    });
+    document.querySelectorAll('.row[data-setting="topic"]').forEach(r => {
+      const on = state.settings.topics.includes(r.dataset.value);
+      r.querySelector('.value').textContent = on ? '已选' : '';
+      r.querySelector('.value').classList.toggle('active', on);
+    });
+
+    // 每周总结
+    $('openWeekly').onclick = () => { closeDrawer(); renderWeekly(); $('weeklyView').classList.add('open'); };
+    // 离线管理
+    $('openOffline').onclick = () => { closeDrawer(); renderOffline(); $('offlineView').classList.add('open'); };
+
+    // 返回按钮
+    document.querySelectorAll('[data-close]').forEach(b => {
+      b.onclick = () => $(b.dataset.close).classList.remove('open');
+    });
+
+    // 清除数据
+    $('clearData').onclick = () => {
+      if (confirm('确定清除所有播放记录和设置吗？此操作不可撤销。')) {
+        localStorage.clear();
+        state.history = {};
+        state.settings = { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','drama'] };
+        toast('已清除');
+        closeDrawer();
+        renderToday();
+      }
+    };
+  }
+
+  // 启动
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>
