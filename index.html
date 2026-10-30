@@ -613,536 +613,444 @@
 
 <div class="toast" id="toast"></div>
 
-<audio id="audioEl" preload="none"></audio>
-
 <script>
 /* ============================================================
-   每日听力 - 核心逻辑
+   每日听力 - 用 iPhone 自带语音朗读内置材料
    ============================================================ */
 (function(){
   'use strict';
-
   const $ = (id) => document.getElementById(id);
-  const audio = $('audioEl');
+  const synth = window.speechSynthesis;
 
-  /* ---------- 常量 ---------- */
-  const DAILY_GOAL_SEC = 30 * 60; // 30 分钟
-  const RING_CIRC = 2 * Math.PI * 105; // 220 viewBox, r=105
+  const DAILY_GOAL_SEC = 30 * 60;
+  const RING_CIRC = 2 * Math.PI * 105;
+  const WORDS_PER_MIN = 150; // 英语朗读基准
 
-  /* RSS 源（通过 rss2json 代理避免跨域） */
-  const RSS_SOURCES = [
-    { topic: 'news', name: 'VOA Learning English', url: 'https://learningenglish.voanews.com/z/3529/rss.xml' },
-    { topic: 'drama', name: 'BBC 6 Minute English', url: 'https://downloads.bbc.co.uk/podcasts/learningenglish/6minenglish/rss.xml' },
-    { topic: 'daily', name: 'ESLPod', url: 'https://www.eslpod.com/feed/' }
-  ];
+  /* ---------- 内置听力材料（12 段，约 30 分钟） ---------- */
+  const MATERIALS = [
+    /* === 日常交流 === */
+    { id:'d1', topic:'daily', title:'At a Coffee Shop',
+      en:"Hi, welcome to Green Bean Cafe. What can I get for you today? Hi, I'd like a medium latte, please. Sure. Would you like that hot or iced? Hot, please. And would you like any syrup? We have vanilla, caramel, and hazelnut. Just vanilla, one pump, please. Got it. Any pastry to go with that? We have fresh croissants and blueberry muffins. A croissant sounds great. Is it warmed? Yes, I can warm it for you. That would be perfect. Your total is six dollars and forty cents. Can I get your name for the cup? It's Sarah. Thank you, Sarah. Your latte will be ready in just a moment. Thanks so much.",
+      zh:'在咖啡店。欢迎来到绿豆咖啡馆，今天想喝点什么？我要一杯中杯拿铁。热的还是冰的？热的。要加糖浆吗？有香草、焦糖和榛果。香草，一泵就好。好的，要不要来点糕点？我们有新鲜可颂和蓝莓玛芬。一个可颂不错，能加热吗？可以的。那就太好了。一共六块四。你叫什么名字？我叫莎拉。谢谢莎拉，你的拿铁马上就好。'},
+    { id:'d2', topic:'daily', title:'Asking for Directions',
+      en:"Excuse me, sorry to bother you. I'm looking for the Central Library. Do you know how to get there? Sure. Go straight down this road for about two blocks. You'll see a big church on the corner. Turn left there, onto Park Street. Keep going for three blocks, and the library will be on your right, across from the post office. Is it within walking distance? Oh yes, about ten minutes on foot. If you don't want to walk, the number seven bus stops right in front of it. How long does the bus take? Maybe five minutes, but you might have to wait. Is there a subway station nearby? The nearest one is Central Station, about a fifteen minute walk from here. Alright, I'll walk. Thank you so much. You're welcome. Good luck!",
+      zh:'问路。不好意思打扰一下，我在找中央图书馆，你知道怎么走吗？沿着这条路直走两个街区，在拐角会看到一个大教堂，左转到公园街。再走三个街区，图书馆就在右手边，邮局对面。走路能到吗？能，大概十分钟。不想走的话，7路公交车正好停在门口。公交要多久？五分钟吧，但可能要等。附近有地铁站吗？最近的是中央站，从这走十五分钟。好的，我走过去。非常感谢。不客气，祝你顺利！'},
+    { id:'d3', topic:'daily', title:'Small Talk with a Colleague',
+      en:"Morning! You're in early today. Yeah, I wanted to beat the traffic. How was your weekend? It was nice. I went hiking with my family on Saturday. The weather was perfect. That sounds lovely. Where did you go? We went to the hills outside the city. It was a bit crowded, but the views were worth it. Did you take any photos? Yeah, I'll show you later. How about you? Did you do anything fun? Mostly just caught up on sleep. I was exhausted from the week. Oh, I hear you. We have that big presentation this afternoon, right? Yeah, at three o'clock. Are you ready? I think so. I've gone through the slides twice already. Great. Let's grab coffee before it starts. My treat. Sounds good. Let's go.",
+      zh:'同事寒暄。早啊，你今天来得真早。嗯，想避开堵车。周末过得怎么样？挺好的，周六和家人去爬山了，天气特别好。真不错，你们去哪了？去了城外的山里，人有点多，但风景值了。拍照了吗？拍了，一会给你看。你呢？玩了什么好玩的吗？基本就是补觉，这周太累了。理解。下午三点有那个大汇报对吧？对，三点。你准备好了吗？应该差不多，PPT已经过了两遍。好，我们开始前去喝杯咖啡吧，我请。好啊，走。'},
+    { id:'d4', topic:'daily', title:'Looking for an Apartment',
+      en:"Hi, I'm calling about the apartment you listed online. Is it still available? Yes, it is. It's a one bedroom on Main Street. Great. How much is the rent? It's twelve hundred dollars a month, including water. Electricity and internet are extra. Is there a minimum lease? Yes, a twelve month lease. We also require a security deposit of one month's rent. Are pets allowed? We allow cats, but no dogs. Do you have laundry in the building? Yes, there's a laundry room in the basement. And parking? There's a spot in the back lot for an extra fifty dollars a month. Can I come see it this afternoon? Sure, between two and four is fine. I'll send you the address. Perfect. See you then.",
+      zh:'租房。你好，我打电话是想问网上那套公寓，还在吗？在的，是主街上的一居室。好的，租金多少？一个月一千二，含水费。电费和网费另算。最少租多久？一年起租，还要一个月押金。可以养宠物吗？可以养猫，不能养狗。楼里有洗衣房吗？地下室有。停车呢？后院车位，每月加五十。我今天下午能看看房吗？可以，两点到四点。我把地址发你。好，一会见。'},
 
-  /* 内置 fallback 内容（RSS 拉取失败时用） */
-  const FALLBACK_EPISODES = [
-    {
-      id: 'fb1', topic: 'daily', title: 'Ordering Food at a Restaurant (Demo)',
-      audio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-      duration: 0, en: 'Welcome. This is a demo episode. In real use, audio from VOA, BBC and ESLPod will load here automatically.', zh: '欢迎。这是演示条目。真实使用时，VOA、BBC 和 ESLPod 的音频会自动加载到这里。'
-    },
-    {
-      id: 'fb2', topic: 'news', title: 'World News in Slow English (Demo)',
-      audio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-      duration: 0, en: 'This is placeholder news content. Connect to the internet to load real episodes.', zh: '这是占位新闻内容。联网后会自动加载真实节目。'
-    },
-    {
-      id: 'fb3', topic: 'drama', title: 'Friendship Dialogue — Script Reading (Demo)',
-      audio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-      duration: 0, en: 'A sample dialogue transcript. Real TV show clips will appear here once the feed loads.', zh: '示例对白文字稿。订阅源加载后，真实的剧集片段会出现在这里。'
-    }
+    /* === 时事新闻（慢速） === */
+    { id:'n1', topic:'news', title:'Study: Remote Work Boosts Productivity',
+      en:"A new study published this week finds that employees who work from home at least three days a week are, on average, thirteen percent more productive than those who work fully in the office. The researchers followed over five hundred workers at a large technology company for six months. They measured productivity by completed projects, meeting efficiency, and self reported satisfaction. The study also found that remote workers took fewer sick days and reported lower stress levels. However, the researchers noted that fully remote workers sometimes felt isolated, and missed informal conversations that often lead to new ideas. The company says it will continue to offer hybrid schedules. Experts say the findings suggest that a flexible approach, rather than a one size fits all policy, may work best for both employers and employees.",
+      zh:'远程工作研究。本周发表的一项新研究发现，每周至少在家工作三天的员工，效率比完全坐班的员工平均高百分之十三。研究人员跟踪了一家大型科技公司的五百多名员工，为期六个月。他们通过完成项目数量、会议效率和自我满意度来衡量效率。研究还发现远程员工病假更少、压力水平更低。但研究人员也指出，完全远程的员工有时会感到孤立，也会想念那些常常催生新想法的非正式交流。该公司表示将继续提供混合排班。专家认为，灵活的方式比一刀切政策对雇主和员工都更好。'},
+    { id:'n2', topic:'news', title:'City Launches New Bike Sharing Program',
+      en:"The city transportation department announced Tuesday that a new bike sharing program will launch next month. Residents will be able to unlock one of two thousand bikes using a smartphone app. The first five minutes are free, and after that riders pay fifteen cents per minute. The program aims to reduce traffic congestion and lower carbon emissions. Over one hundred docking stations will be placed near subway stops, parks, and shopping districts. City officials say similar programs in other cities have reduced short car trips by up to twenty percent. However, some residents have raised concerns about bikes being left on sidewalks. In response, the city says it will add extra parking spots and send staff to clear up improperly parked bikes twice a day.",
+      zh:'共享单车计划。市交通局周二宣布，一个新的共享单车项目将于下月启动。市民可以用手机 app 解锁两千辆自行车中的任意一辆。前五分钟免费，之后每分钟十五美分。该项目旨在缓解交通拥堵、降低碳排放。地铁站、公园和商业区附近将设一百多个停车点。市政府表示，其他城市的类似项目已使短途驾车出行减少了百分之二十。不过一些居民担心自行车会被随意扔在人行道上。作为回应，市政府表示会增加停车位，并每天两次派工作人员清理乱停的自行车。'},
+    { id:'n3', topic:'news', title:'Weather: Rain Expected This Weekend',
+      en:"The national weather service is predicting heavy rain across the region this weekend. Forecasters say the storm will arrive late Friday night and continue through Sunday afternoon. Up to eighty millimeters of rain could fall in some areas. Residents are advised to clear gutters and move outdoor furniture indoors. Drivers should expect slippery roads and possible flooding in low lying areas. Schools in several counties have already announced that outdoor events on Saturday will be moved indoors. Next week, the weather is expected to clear up, with sunny skies and temperatures returning to around twenty two degrees. The weather service will update its forecast on Friday morning.",
+      zh:'天气预报。国家气象局预测本周末该地区将有大雨。预报员称，风暴将在周五深夜到达，持续到周日下午。部分地区降雨量可能达到八十毫米。建议居民清理排水沟，把户外家具搬进室内。司机应注意路滑，低洼地区可能积水。多个县的学校已宣布周六的户外活动将移至室内。下周天气预计转晴，气温回升到二十二度左右。气象局将在周五早上更新预报。'},
+    { id:'n4', topic:'news', title:'Libraries Add Free Audio Book Service',
+      en:"Public libraries across the country are expanding their free audio book services. Starting this month, library card holders can borrow up to ten audio books at a time using a new app, with no waiting lists for most popular titles. The program is funded by a three million dollar government grant. Library officials say they noticed a twenty percent increase in audio book borrowing last year, especially among younger readers. The app also includes features that let readers adjust narration speed and set sleep timers. Some critics worry that the service might reduce physical book borrowing, but early data suggests that audio book users also borrow more physical books than before. The service is available to all library members at no extra cost.",
+      zh:'图书馆增加免费有声书服务。全国各地的公共图书馆正在扩展免费有声书服务。从本月起，持借书证的读者可以通过一个新 app 同时借阅十本有声书，大多数热门书目无需等待名单。该项目由政府三百万美元拨款资助。图书馆官员表示，他们注意到去年有声书借阅量增长了百分之二十，年轻读者尤其明显。这个 app 还允许读者调节朗读音速、设置睡眠定时。有评论担心这项服务会减少纸质书借阅，但早期数据显示，有声书用户借阅的纸质书也比以前更多。该服务对所有图书馆会员免费开放。'},
+
+    /* === 影视精读（剧本对白） === */
+    { id:'f1', topic:'drama', title:'Friends: The One with the Late Text',
+      en:"Scene: A coffee shop. RACHEL, ROSS, and MONICA are sitting at a table. RACHEL: Okay, tell me again why you didn't text her back. ROSS: Because! If I text her back right away, she's gonna think I was sitting by my phone. MONICA: You were sitting by your phone. ROSS: That is not the point! The point is, I need to play it cool. RACHEL: Ross, you played cool for three days. She probably thinks you're not interested. ROSS: Wait, is that bad? MONICA: Yes, that is bad. ROSS: Okay, okay, what do I do? RACHEL: You text her. Right now. Say, hey, sorry I missed your call, I was in a meeting. ROSS: That's a lie. I was watching old cartoons. MONICA: And that is exactly why we don't tell her the truth.",
+      zh:'老友记：未回短信那一集。场景：咖啡馆。瑞秋、罗斯、莫妮卡坐在桌边。瑞秋：好，再跟我说一遍，你为什么不回她短信。罗斯：因为！我要是马上回，她会觉得我一直守着手机。莫妮卡：你确实一直守着手机。罗斯：重点不是这个！重点是，我得装得淡定一点。瑞秋：罗斯，你已经淡定了三天了，她可能觉得你没意思。罗斯：等等，那很糟吗？莫妮卡：对，非常糟。罗斯：好吧，我该怎么办？瑞秋：现在就给她发短信，说：嘿，抱歉没接到电话，刚才在开会。罗斯：那是撒谎，我在看老动画片。莫妮卡：所以才说不能跟她说实话。'},
+    { id:'f2', topic:'drama', title:'The Office: The Job Interview',
+      en:"MICHAEL: Hello! And welcome to Dunder Mifflin. I'm Michael Scott, regional manager. INTERVIEWER: Nice to meet you, Mr. Scott. Thank you for making time. MICHAEL: Oh, please, call me Michael. So, tell me about yourself. INTERVIEWER: Well, I've been in sales for eight years. MICHAEL: Eight years! That's longer than I've been alive. Just kidding. INTERVIEWER: ...MICHAEL: Okay, serious question. Where do you see yourself in five years? INTERVIEWER: I'd like to be running a small team, maybe in a regional role. MICHAEL: A regional role. Like... mine? INTERVIEWER: I didn't mean it that way. MICHAEL: It's okay. I respect ambition. You know what, you're hired. INTERVIEWER: Just like that? MICHAEL: Hey, I know talent when I see it. Welcome to the team.",
+      zh:'办公室：求职面试。迈克尔：你好！欢迎来到 Dundler Mifflin，我是地区经理迈克尔·斯科特。面试官：很高兴见到您，斯科特先生，感谢您拨冗。迈克尔：请叫我迈克尔。跟我说说你自己。面试官：我做销售八年了。迈克尔：八年！比我活的时间都长。开玩笑的。面试官：……迈克尔：好，正经问题。五年后你想做什么？面试官：我想带一个小团队，也许做个地区负责人。迈克尔：地区负责人。比如……我的位置？面试官：我不是那个意思。迈克尔：没关系，我欣赏有野心的人。这样吧，你被录用了。面试官：就这么定了？迈克尔：我一眼就能看出人才。欢迎加入。'},
+    { id:'f3', topic:'drama', title:'Sherlock: The First Meeting',
+      en:"JOHN: So, this all seems rather fantastic. You think you can tell all that just by looking at me? SHERLOCK: I can tell you were in Afghanistan. Or Iraq. The pain in your leg says army. The limp is psychosomatic, by the way. JOHN: How on earth could you possibly know that? SHERLOCK: I observe. Most people don't. Your haircut is military. Your posture is military. But you hold yourself like you're in pain. You look down when you walk, not because of the leg, but because you're thinking. JOHN: That's impossible. SHERLOCK: And you have a phone. An expensive phone. But you're clearly not wealthy. Someone gave it to you. JOHN: My sister gave it to me. SHERLOCK: Ah. Estranged. You check it constantly, hoping for a message that will never come. JOHN: ...We should get coffee sometime.",
+      zh:'神探夏洛克：初次见面。约翰：这一切也太离谱了。你觉得光看我就能知道这些？夏洛克：我能看出来你在阿富汗待过，或者伊拉克。你腿疼说明你当过兵。顺便说一句，那是心理性的跛行。约翰：你到底怎么知道的？夏洛克：我观察，大多数人不会。你的发型是军人的，站姿也是，但你走路的样子像是在忍痛。你走路时低头，不是因为腿，而是因为在思考。约翰：这不可能。夏洛克：你还有一部手机。很贵的手机，但你显然不富裕，是别人给你的。约翰：我姐姐给的。夏洛克：啊。关系疏远。你不停看手机，希望收到一条永远不会来的消息。约翰：……我们找个时间喝杯咖啡吧。'},
+    { id:'f4', topic:'drama', title:'Modern Family: Family Dinner',
+      en:"CLAIRE: Who wants more lasagna? PHIL: I do, but the kids said if I have a third piece they're taking my credit card. LUKE: Dad, you had two plates already. ALEX: Actually, that's three. PHIL: Three? I only remember two. CLAIRE: You have a problem, Phil. PHIL: I have a healthy appreciation for Italian cuisine. LUKE: Can I be excused? I have homework. CLAIRE: You just sat down. Finish your vegetables. LUKE: But they're green. CLAIRE: That's the point. MITCH: Hey, everybody. Sorry we're late. Cam got stuck at the petting zoo. CAM: A goat ate my tie. I had to rescue it. LILY: We brought doughnuts. CLAIRE: Doughnuts? Before dinner? CAM: They're a peace offering.",
+      zh:'摩登家庭：家庭晚餐。克莱尔：谁还要千层面？菲尔：我要，但孩子们说我要再吃一块就收走我的信用卡。卢克：爸，你已经吃了两盘了。亚历克斯：其实是三盘。菲尔：三盘？我只记得两盘。克莱尔：菲尔，你有问题。菲尔：我只是对意大利菜有健康的欣赏。卢克：我能离席吗？我有作业。克莱尔：你刚坐下，把菜吃完。卢克：可它们是绿的。克莱尔：所以才让你吃。米奇：大家好，抱歉来晚了，小卡在动物园被卡住了。小卡：一只山羊吃了我的领带，我得去救它。莉莉：我们带了甜甜圈。克莱尔：晚饭前吃甜甜圈？小卡：这是赔礼。'}
   ];
 
   /* ---------- 状态 ---------- */
   let state = {
     settings: { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','drama'] },
-    playlist: [],          // 今日播放列表
-    currentIndex: 0,
-    history: {},           // { 'YYYY-MM-DD': { seconds, items: [{id, sec, done}] } }
-    offline: false,
-    loadedFromFeed: false
+    playlist: [], currentIndex: 0,
+    history: {}, offline: false,
+    playing: false, paused: false,
+    wordIdx: 0, totalWords: 0, tickTimer: null
   };
 
   /* ---------- 工具 ---------- */
-  function todayStr() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  }
-  function fmtTime(sec) {
-    if (!sec || isNaN(sec)) return '0:00';
-    sec = Math.floor(sec);
-    const m = Math.floor(sec/60), s = sec%60;
-    return m + ':' + String(s).padStart(2,'0');
-  }
-  function fmtMin(sec) {
-    return Math.round(sec/60);
-  }
-  function toast(msg) {
-    const t = $('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(t._timer);
-    t._timer = setTimeout(()=> t.classList.remove('show'), 2000);
-  }
-  function loadLS(key, def) {
-    try { const v = localStorage.getItem('hl_'+key); return v ? JSON.parse(v) : def; }
-    catch(e) { return def; }
-  }
-  function saveLS(key, val) {
-    try { localStorage.setItem('hl_'+key, JSON.stringify(val)); } catch(e){}
-  }
+  function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function fmtTime(sec){ if(!sec||isNaN(sec))return '0:00'; sec=Math.floor(sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+  function fmtMin(sec){ return Math.round(sec/60); }
+  function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2000); }
+  function loadLS(k,d){ try{const v=localStorage.getItem('hl_'+k); return v?JSON.parse(v):d;}catch(e){return d;} }
+  function saveLS(k,v){ try{localStorage.setItem('hl_'+k,JSON.stringify(v));}catch(e){} }
+  function estDuration(ep){ return Math.round(ep.en.split(/\s+/).length / (WORDS_PER_MIN * state.settings.speed) * 60); }
 
   /* ---------- 初始化 ---------- */
-  function init() {
+  function init(){
     state.settings = Object.assign(state.settings, loadLS('settings', {}));
     state.history = loadLS('history', {});
 
-    // 日期
     const now = new Date();
     const days = ['周日','周一','周二','周三','周四','周五','周六'];
     $('topDate').textContent = (now.getMonth()+1)+'月'+now.getDate()+'日 '+days[now.getDay()];
 
-    // 加载播放列表
-    loadPlaylist().then(()=>{
-      renderNowPlaying();
-      renderToday();
-    });
+    // 根据主题偏好组装播放列表
+    buildPlaylist();
 
-    // 绑定事件
     bindEvents();
+    renderNowPlaying();
+    renderToday();
+    renderTranscript();
 
-    // 注册 Service Worker（离线缓存）
-    if ('serviceWorker' in navigator && location.protocol === 'https:' || location.hostname === 'localhost') {
+    // PWA
+    if ('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')) {
       navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
+    window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); });
+    window.addEventListener('offline', ()=>{ state.offline=true; toast('已离线，可继续收听'); });
 
-    // 网络状态
-    window.addEventListener('online', ()=>{ state.offline = false; toast('网络已连接，正在同步'); syncHistory(); });
-    window.addEventListener('offline', ()=>{ state.offline = true; toast('已离线，可继续收听'); });
+    // 检查语音支持
+    if (!synth) toast('当前浏览器不支持语音朗读');
   }
 
-  /* ---------- 播放列表加载 ---------- */
-  async function loadPlaylist() {
-    // 先尝试从 RSS 拉
-    try {
-      const eps = await fetchFromFeeds();
-      if (eps.length >= 3) {
-        state.playlist = eps;
-        state.loadedFromFeed = true;
-        saveLS('playlist_cache', { date: todayStr(), items: eps });
-        return;
+  function buildPlaylist(){
+    const topics = state.settings.topics;
+    state.playlist = MATERIALS.filter(m => topics.includes(m.topic));
+    if (!state.playlist.length) state.playlist = MATERIALS.slice();
+    state.currentIndex = 0;
+  }
+
+  /* ---------- 播放控制（TTS） ---------- */
+  function togglePlay(){
+    if (!state.playlist.length) return;
+    if (state.playing && !state.paused) {
+      synth.pause();
+      state.paused = true;
+      updatePlayIcon(false);
+    } else if (state.playing && state.paused) {
+      synth.resume();
+      state.paused = false;
+      updatePlayIcon(true);
+    } else {
+      speakCurrent();
+    }
+  }
+
+  function speakCurrent(){
+    const ep = state.playlist[state.currentIndex];
+    if (!ep || !synth) return;
+    synth.cancel();
+
+    const u = new SpeechSynthesisUtterance(ep.en);
+    u.rate = state.settings.speed;
+    u.lang = 'en-US';
+    // 尝试选一个英文语音
+    const voices = synth.getVoices();
+    const enVoice = voices.find(v => v.lang.startsWith('en') && /Google|Samantha|Daniel/i.test(v.name)) || voices.find(v => v.lang.startsWith('en'));
+    if (enVoice) u.voice = enVoice;
+
+    state.totalWords = ep.en.split(/\s+/).length;
+    state.wordIdx = 0;
+
+    u.onstart = () => {
+      state.playing = true; state.paused = false;
+      updatePlayIcon(true);
+      startTick();
+    };
+    u.onboundary = (e) => {
+      if (e.name === 'word') {
+        state.wordIdx = e.charIndex ? ep.en.slice(0, e.charIndex).split(/\s+/).length : state.wordIdx;
+        updateProgress();
       }
-    } catch(e) { console.warn('feed fetch failed', e); }
+    };
+    u.onend = () => {
+      stopTick();
+      state.playing = false;
+      updatePlayIcon(false);
+      markEpisodeDone();
+      setTimeout(next, 600);
+    };
+    u.onerror = () => {
+      stopTick();
+      state.playing = false;
+      updatePlayIcon(false);
+    };
 
-    // fallback：用缓存或内置
-    const cached = loadLS('playlist_cache', null);
-    if (cached && cached.date === todayStr()) {
-      state.playlist = cached.items;
-    } else {
-      state.playlist = FALLBACK_EPISODES;
-    }
-  }
-
-  async function fetchFromFeeds() {
-    const items = [];
-    for (const src of RSS_SOURCES) {
-      try {
-        const api = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(src.url);
-        const resp = await fetch(api);
-        const data = await resp.json();
-        if (data.status === 'ok' && data.items && data.items.length) {
-          // 取最新 2 条
-          for (let i = 0; i < Math.min(2, data.items.length); i++) {
-            const it = data.items[i];
-            // 找音频
-            let audioUrl = '';
-            if (it.enclosure && it.enclosure.link) audioUrl = it.enclosure.link;
-            else if (it.guid && it.guid.endsWith('.mp3')) audioUrl = it.guid;
-            if (!audioUrl) continue;
-
-            // 提取简介作为文字稿
-            const desc = (it.description || '').replace(/<[^>]+>/g, '').trim();
-            items.push({
-              id: src.topic + '_' + i + '_' + Date.now(),
-              topic: src.topic,
-              title: it.title || src.name + ' Episode',
-              audio: audioUrl,
-              duration: 0,
-              en: desc.substring(0, 600),
-              zh: ''
-            });
-          }
-        }
-      } catch(e) { console.warn(src.name, 'failed', e); }
-    }
-    return items;
-  }
-
-  /* ---------- 播放控制 ---------- */
-  function togglePlay() {
-    if (!state.playlist.length) { toast('正在加载内容...'); return; }
-    if (audio.paused) {
-      audio.play().catch(()=> toast('播放失败，请检查网络'));
-    } else {
-      audio.pause();
-    }
-  }
-
-  function loadEpisode(idx) {
-    const ep = state.playlist[idx];
-    if (!ep) return;
-    state.currentIndex = idx;
-    audio.src = ep.audio;
-    audio.playbackRate = state.settings.speed;
-    audio.load();
+    synth.speak(u);
     renderNowPlaying();
     renderTranscript();
-    audio.play().catch(()=>{});
   }
 
-  function next() {
-    const nextIdx = (state.currentIndex + 1) % state.playlist.length;
-    loadEpisode(nextIdx);
-  }
-  function prev() {
-    const prevIdx = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
-    loadEpisode(prevIdx);
+  function updatePlayIcon(playing){
+    $('playIcon').innerHTML = playing
+      ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
+      : '<polygon points="6,4 20,12 6,20"/>';
+    $('playBtn').classList.toggle('playing', playing);
   }
 
-  function cycleSpeed() {
+  function updateProgress(){
+    const pct = state.totalWords ? state.wordIdx / state.totalWords * 100 : 0;
+    $('progressFill').style.width = pct + '%';
+    const ep = state.playlist[state.currentIndex];
+    const total = estDuration(ep||{en:''});
+    const cur = Math.round(total * pct / 100);
+    $('curTime').textContent = fmtTime(cur);
+    $('durTime').textContent = fmtTime(total);
+  }
+
+  function next(){
+    if (state.playing) synth.cancel();
+    stopTick();
+    state.currentIndex = (state.currentIndex + 1) % state.playlist.length;
+    speakCurrent();
+  }
+  function prev(){
+    if (state.playing) synth.cancel();
+    stopTick();
+    state.currentIndex = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
+    speakCurrent();
+  }
+
+  function cycleSpeed(){
     const speeds = [0.75, 1.0, 1.25];
     const cur = speeds.indexOf(state.settings.speed);
     state.settings.speed = speeds[(cur+1) % speeds.length];
-    audio.playbackRate = state.settings.speed;
     $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'') + 'x';
     saveLS('settings', state.settings);
+    // 重新朗读当前段以应用新语速
+    if (state.playing || state.paused) speakCurrent();
+  }
+
+  /* ---------- 播放计时 ---------- */
+  function startTick(){
+    stopTick();
+    state.tickTimer = setInterval(()=>{
+      if (!state.playing || state.paused) return;
+      const today = todayStr();
+      if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
+      state.history[today].seconds += 1;
+      if (state.history[today].seconds % 30 === 0) saveLS('history', state.history);
+      renderToday();
+    }, 1000);
+  }
+  function stopTick(){ if (state.tickTimer) { clearInterval(state.tickTimer); state.tickTimer=null; } }
+
+  function markEpisodeDone(){
+    const ep = state.playlist[state.currentIndex];
+    const today = todayStr();
+    if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
+    if (!state.history[today].items.find(i => i.id === ep.id)) {
+      state.history[today].items.push({ id:ep.id, title:ep.title, sec:estDuration(ep), done:true });
+    }
+    saveLS('history', state.history);
   }
 
   /* ---------- 渲染 ---------- */
-  function renderNowPlaying() {
+  function renderNowPlaying(){
     const ep = state.playlist[state.currentIndex];
     if (!ep) { $('nowPlayingCard').style.display='none'; $('controlsRow').style.visibility='hidden'; return; }
     $('nowPlayingCard').style.display='block';
     $('controlsRow').style.visibility='visible';
     $('npTitle').textContent = ep.title;
     const tag = $('npTag');
-    tag.textContent = ep.topic === 'daily' ? '日常' : ep.topic === 'news' ? '新闻' : '影视';
+    tag.textContent = ep.topic==='daily' ? '日常' : ep.topic==='news' ? '新闻' : '影视';
     tag.className = 'tag ' + ep.topic;
     $('progressWrap').style.display = 'block';
-
-    // 下一段预告
     const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
-    if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title.substring(0, 40);
+    if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title;
   }
 
-  function renderTranscript() {
+  function renderTranscript(){
     const ep = state.playlist[state.currentIndex];
     const sub = state.settings.subtitle;
     const box = $('transcript');
-    if (sub === 'off' || !ep) { box.classList.remove('show'); return; }
+    if (sub==='off' || !ep) { box.classList.remove('show'); return; }
     box.classList.add('show');
-    $('tEn').style.display = (sub === 'en' || sub === 'bilingual') ? 'block' : 'none';
-    $('tZh').style.display = (sub === 'zh' || sub === 'bilingual') ? 'block' : 'none';
-    $('tEn').textContent = ep.en || '（暂无文字稿）';
-    $('tZh').textContent = ep.zh || '';
+    $('tEn').style.display = (sub==='en'||sub==='bilingual') ? 'block' : 'none';
+    $('tZh').style.display = (sub==='zh'||sub==='bilingual') ? 'block' : 'none';
+    $('tEn').textContent = ep.en;
+    $('tZh').textContent = ep.zh;
   }
 
-  function renderToday() {
-    const today = state.history[todayStr()] || { seconds: 0, items: [] };
-    const sec = today.seconds || 0;
+  function renderToday(){
+    const today = state.history[todayStr()] || { seconds:0, items:[] };
+    const sec = today.seconds||0;
     const min = fmtMin(sec);
     $('todaySeconds').textContent = min;
-    const pct = Math.min(1, sec / DAILY_GOAL_SEC);
-    $('ringFg').style.strokeDashoffset = RING_CIRC * (1 - pct);
+    const pct = Math.min(1, sec/DAILY_GOAL_SEC);
+    $('ringFg').style.strokeDashoffset = RING_CIRC * (1-pct);
     if (sec >= DAILY_GOAL_SEC) {
-      $('todayLabel').innerHTML = '<span class="goal-done">今日目标已达成</span> · 已听 ' + min + ' 分钟，继续保持';
+      $('todayLabel').innerHTML = '<span class="goal-done">今日目标已达成</span> · 已听 '+min+' 分钟，继续保持';
     } else {
-      const remain = Math.max(0, Math.round((DAILY_GOAL_SEC - sec)/60));
-      $('todayLabel').textContent = '今日目标 30 分钟 · 还差 ' + remain + ' 分钟';
+      const remain = Math.max(0, Math.round((DAILY_GOAL_SEC-sec)/60));
+      $('todayLabel').textContent = '今日目标 30 分钟 · 还差 '+remain+' 分钟';
     }
-  }
-
-  /* ---------- 播放记录 ---------- */
-  function tickPlayback() {
-    if (audio.paused || !audio.currentTime) return;
-    const today = todayStr();
-    if (!state.history[today]) state.history[today] = { seconds: 0, items: [] };
-    state.history[today].seconds += 1;
-    // 每分钟持久化一次
-    if (Math.floor(state.history[today].seconds) % 30 === 0) {
-      saveLS('history', state.history);
-    }
-    renderToday();
-  }
-
-  function syncHistory() {
-    // 有网时把本地历史归档（纯本地应用，这里只是确认写入）
-    saveLS('history', state.history);
-    // 尝试预缓存今日音频
-    state.playlist.forEach(ep => {
-      if (ep.audio && caches) {
-        caches.open('hl_audio').then(c => c.match(ep.audio)).then(m => {
-          if (!m) fetch(ep.audio, {mode:'no-cors'}).then(r => caches.open('hl_audio').then(c => c.put(ep.audio, r))).catch(()=>{});
-        });
-      }
-    });
   }
 
   /* ---------- 每周总结 ---------- */
-  function renderWeekly() {
+  function renderWeekly(){
     const now = new Date();
-    const day = now.getDay() || 7; // 周日=7
+    const day = now.getDay()||7;
     const monday = new Date(now);
-    monday.setDate(now.getDate() - day + 1);
-    monday.setHours(0,0,0,0);
+    monday.setDate(now.getDate()-day+1); monday.setHours(0,0,0,0);
 
-    let totalSec = 0;
-    let dailySecs = [0,0,0,0,0,0,0];
-    let topicSecs = { daily: 0, news: 0, drama: 0 };
-    let episodeList = [];
-    let metDays = 0;
+    let totalSec=0;
+    let dailySecs=[0,0,0,0,0,0,0];
+    let topicSecs={daily:0,news:0,drama:0};
+    let episodeList=[];
+    let metDays=0;
 
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
+    for (let i=0;i<7;i++){
+      const d = new Date(monday); d.setDate(monday.getDate()+i);
       const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       const rec = state.history[key];
       if (rec) {
-        dailySecs[i] = rec.seconds || 0;
-        totalSec += rec.seconds || 0;
+        dailySecs[i] = rec.seconds||0;
+        totalSec += rec.seconds||0;
         if ((rec.seconds||0) >= DAILY_GOAL_SEC) metDays++;
-        (rec.items||[]).forEach(it => episodeList.push({...it, date: key}));
+        (rec.items||[]).forEach(it => episodeList.push({...it, date:key}));
       }
     }
-
-    // 主题秒数（粗略：按播放列表比例分摊）
-    state.playlist.forEach(ep => {
-      if (topicSecs[ep.topic] !== undefined) topicSecs[ep.topic] += 300; // 估算每段5分钟
+    // 主题按本周听过的条目累计
+    episodeList.forEach(it => {
+      const m = MATERIALS.find(x => x.id === it.id);
+      if (m && topicSecs[m.topic] !== undefined) topicSecs[m.topic] += (it.sec||180);
     });
-    const topicTotal = topicSecs.daily + topicSecs.news + topicSecs.drama || 1;
-
+    const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama || 1;
     const totalMin = fmtMin(totalSec);
-    const goalPct = Math.round(totalSec / (DAILY_GOAL_SEC * 7) * 100);
-
+    const goalPct = Math.round(totalSec/(DAILY_GOAL_SEC*7)*100);
     const days = ['一','二','三','四','五','六','日'];
     const maxBar = Math.max(...dailySecs, DAILY_GOAL_SEC);
 
-    let html = `
-      <div class="weekly-hero">
-        <div class="big">${totalMin}<span class="unit"> 分钟</span></div>
-        <div class="sub">本周总听力时长 · 目标完成率 ${goalPct}%</div>
-        ${metDays > 0 ? `<div class="streak">${metDays} 天达成 30 分钟目标</div>` : '<div class="streak" style="background:var(--bg-soft);color:var(--ink-faint)">本周还未达成目标</div>'}
-      </div>
+    let html = '<div class="weekly-hero">'+
+      '<div class="big">'+totalMin+'<span class="unit"> 分钟</span></div>'+
+      '<div class="sub">本周总听力时长 · 目标完成率 '+goalPct+'%</div>'+
+      (metDays>0 ? '<div class="streak">'+metDays+' 天达成 30 分钟目标</div>' : '<div class="streak" style="background:var(--bg-soft);color:var(--ink-faint)">本周还未达成目标</div>')+
+      '</div>'+
+      '<div class="section-title">主题分布</div>'+
+      '<div class="topic-bar">'+
+        '<div class="seg daily" style="width:'+(topicSecs.daily/topicTotal*100)+'%"></div>'+
+        '<div class="seg news" style="width:'+(topicSecs.news/topicTotal*100)+'%"></div>'+
+        '<div class="seg drama" style="width:'+(topicSecs.drama/topicTotal*100)+'%"></div>'+
+      '</div>'+
+      '<div class="legend">'+
+        '<span><span class="dot" style="background:#2D5A3D"></span>日常 '+fmtMin(topicSecs.daily)+'分</span>'+
+        '<span><span class="dot" style="background:#B8923A"></span>新闻 '+fmtMin(topicSecs.news)+'分</span>'+
+        '<span><span class="dot" style="background:#6B3A6B"></span>影视 '+fmtMin(topicSecs.drama)+'分</span>'+
+      '</div>'+
+      '<div class="section-title">每日时长</div>'+
+      '<div class="days-grid">';
 
-      <div class="section-title">主题分布</div>
-      <div class="topic-bar">
-        <div class="seg daily" style="width:${topicSecs.daily/topicTotal*100}%"></div>
-        <div class="seg news" style="width:${topicSecs.news/topicTotal*100}%"></div>
-        <div class="seg drama" style="width:${topicSecs.drama/topicTotal*100}%"></div>
-      </div>
-      <div class="legend">
-        <span><span class="dot" style="background:#2D5A3D"></span>日常 ${fmtMin(topicSecs.daily)}分</span>
-        <span><span class="dot" style="background:#B8923A"></span>新闻 ${fmtMin(topicSecs.news)}分</span>
-        <span><span class="dot" style="background:#6B3A6B"></span>影视 ${fmtMin(topicSecs.drama)}分</span>
-      </div>
-
-      <div class="section-title">每日时长</div>
-      <div class="days-grid">
-    `;
-
-    for (let i = 0; i < 7; i++) {
-      const h = (dailySecs[i] / maxBar * 100).toFixed(1);
+    for (let i=0;i<7;i++){
+      const h = (dailySecs[i]/maxBar*100).toFixed(1);
       const met = dailySecs[i] >= DAILY_GOAL_SEC;
-      html += `<div class="day-col">
-        <div class="bar ${met?'met':''}" style="height:${h}%" title="${fmtMin(dailySecs[i])}分"></div>
-        <div class="day-label">${days[i]}</div>
-      </div>`;
+      html += '<div class="day-col"><div class="bar '+(met?'met':'')+'" style="height:'+h+'%"></div><div class="day-label">'+days[i]+'</div></div>';
     }
     html += '</div>';
 
     if (episodeList.length) {
       html += '<div class="section-title">听过的内容</div>';
-      episodeList.slice(0, 20).forEach(it => {
-        html += `<div class="episode-item">
-          <div class="ep-title">${it.title || '未命名'}</div>
-          <div class="ep-meta"><span>${it.date}</span><span>${fmtMin(it.sec||0)} 分钟</span></div>
-        </div>`;
+      episodeList.slice(0,20).forEach(it => {
+        html += '<div class="episode-item"><div class="ep-title">'+(it.title||'未命名')+'</div>'+
+          '<div class="ep-meta"><span>'+it.date+'</span><span>'+fmtMin(it.sec||0)+' 分钟</span></div></div>';
       });
     } else {
       html += '<div class="section-title">听过的内容</div><div class="loading">本周还没有播放记录</div>';
     }
-
     $('weeklyContent').innerHTML = html;
   }
 
   /* ---------- 离线管理 ---------- */
-  function renderOffline() {
-    const cacheCount = state.playlist.length;
-    const html = `
-      <div class="offline-card">
-        <div class="row"><span class="k">今日条目</span><span class="v">${cacheCount} 段</span></div>
-        <div class="row"><span class="k">已缓存</span><span class="v" id="cachedCount">检查中...</span></div>
-        <div class="row"><span class="k">网络状态</span><span class="v">${state.offline ? '离线' : '在线'}</span></div>
-      </div>
-      <button class="btn" id="btnCacheNow">一键缓存今日音频</button>
-      <button class="btn ghost" id="btnClearCache">清除离线缓存</button>
-      <div style="font-size:12px;color:var(--ink-faint);margin-top:16px;line-height:1.6">
-        首次联网收听后，音频会自动存入浏览器缓存。之后无网也能继续听。有网时播放记录会自动归档。
-      </div>
-    `;
+  function renderOffline(){
+    const total = MATERIALS.length;
+    const html =
+      '<div class="offline-card">'+
+        '<div class="row"><span class="k">内置材料</span><span class="v">'+total+' 段</span></div>'+
+        '<div class="row"><span class="k">今日播放列表</span><span class="v">'+state.playlist.length+' 段</span></div>'+
+        '<div class="row"><span class="k">网络状态</span><span class="v">'+(state.offline?'离线':'在线')+'</span></div>'+
+      '</div>'+
+      '<div style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin-top:8px">'+
+        '所有听力材料和朗读功能都内置在页面里，<b>完全不需要网络</b>。'+
+        '首次打开后，把网页"添加到主屏幕"，之后飞行模式下也能正常听。'+
+      '</div>';
     $('offlineContent').innerHTML = html;
-
-    // 检查已缓存数量
-    if (window.caches) {
-      caches.open('hl_audio').then(c => c.keys()).then(keys => {
-        $('cachedCount').textContent = keys.length + ' 个文件';
-      }).catch(()=> $('cachedCount').textContent = '不可用');
-    } else {
-      $('cachedCount').textContent = '浏览器不支持';
-    }
-
-    $('btnCacheNow').onclick = () => {
-      let done = 0;
-      state.playlist.forEach(ep => {
-        fetch(ep.audio, {mode:'no-cors'})
-          .then(r => caches.open('hl_audio').then(c => c.put(ep.audio, r)))
-          .then(()=>{ done++; $('cachedCount').textContent = done + ' 个文件'; })
-          .catch(()=>{});
-      });
-      toast('开始缓存，请保持网络连接');
-    };
-
-    $('btnClearCache').onclick = () => {
-      if (confirm('确定清除所有离线音频缓存吗？')) {
-        caches.delete('hl_audio').then(()=>{ toast('已清除'); renderOffline(); });
-      }
-    };
   }
 
   /* ---------- 事件绑定 ---------- */
-  function bindEvents() {
-    // 播放/暂停
+  function bindEvents(){
     $('playBtn').onclick = togglePlay;
 
-    // 音频事件
-    audio.addEventListener('play', ()=> {
-      $('playIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
-      $('playBtn').classList.add('playing');
-    });
-    audio.addEventListener('pause', ()=> {
-      $('playIcon').innerHTML = '<polygon points="6,4 20,12 6,20"/>';
-      $('playBtn').classList.remove('playing');
-      // 保存进度
-      const ep = state.playlist[state.currentIndex];
-      if (ep) {
-        const today = todayStr();
-        if (!state.history[today]) state.history[today] = { seconds: 0, items: [] };
-        if (!state.history[today].items.find(i => i.id === ep.id)) {
-          state.history[today].items.push({ id: ep.id, title: ep.title, sec: 0, done: audio.ended });
-        }
-        saveLS('history', state.history);
-      }
-    });
-    audio.addEventListener('timeupdate', ()=> {
-      $('progressFill').style.width = (audio.currentTime / audio.duration * 100 || 0) + '%';
-      $('curTime').textContent = fmtTime(audio.currentTime);
-      $('durTime').textContent = fmtTime(audio.duration);
-      tickPlayback();
-    });
-    audio.addEventListener('ended', ()=> {
-      const ep = state.playlist[state.currentIndex];
-      if (ep) {
-        const today = todayStr();
-        const item = (state.history[today]?.items||[]).find(i => i.id === ep.id);
-        if (item) item.done = true;
-      }
-      next();
-    });
-    audio.addEventListener('error', ()=> {
-      // 音频加载失败，跳到下一段
-      setTimeout(next, 1500);
-    });
-
-    // 进度条点击
     $('progressBar').onclick = (e) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const pct = (e.clientX - rect.left) / rect.width;
-      if (audio.duration) audio.currentTime = pct * audio.duration;
+      // TTS 不能精确跳转，只做提示
+      toast('拖动进度暂不支持，可点上一段/下一段切换');
     };
 
-    // 控制
     $('nextBtn').onclick = next;
     $('prevBtn').onclick = prev;
     $('speedBtn').onclick = cycleSpeed;
-    $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'') + 'x';
+    $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'')+'x';
 
-    // 抽屉
     $('openDrawer').onclick = () => { $('drawer').classList.add('open'); $('drawerMask').classList.add('open'); };
     $('drawerMask').onclick = closeDrawer;
-    function closeDrawer() { $('drawer').classList.remove('open'); $('drawerMask').classList.remove('open'); }
+    function closeDrawer(){ $('drawer').classList.remove('open'); $('drawerMask').classList.remove('open'); }
 
-    // 设置项
     document.querySelectorAll('.drawer .row[data-setting]').forEach(row => {
       row.onclick = () => {
-        const key = row.dataset.setting;
-        const val = row.dataset.value;
-        if (key === 'level') {
+        const key = row.dataset.setting, val = row.dataset.value;
+        if (key==='level') {
           state.settings.level = val;
-          document.querySelectorAll('.row[data-setting="level"] .value').forEach(v => v.classList.remove('active'));
+          document.querySelectorAll('.row[data-setting="level"] .value').forEach(v=>v.classList.remove('active'));
           row.querySelector('.value').classList.add('active');
-        } else if (key === 'subtitle') {
+        } else if (key==='subtitle') {
           state.settings.subtitle = val;
-          document.querySelectorAll('.row[data-setting="subtitle"] .value').forEach(v => v.classList.remove('active'));
+          document.querySelectorAll('.row[data-setting="subtitle"] .value').forEach(v=>v.classList.remove('active'));
           row.querySelector('.value').classList.add('active');
           renderTranscript();
-        } else if (key === 'topic') {
+        } else if (key==='topic') {
           const idx = state.settings.topics.indexOf(val);
-          if (idx >= 0) { state.settings.topics.splice(idx,1); row.querySelector('.value').textContent=''; }
+          if (idx>=0) { state.settings.topics.splice(idx,1); row.querySelector('.value').textContent=''; row.querySelector('.value').classList.remove('active'); }
           else { state.settings.topics.push(val); row.querySelector('.value').textContent='已选'; row.querySelector('.value').classList.add('active'); }
+          buildPlaylist();
+          renderNowPlaying();
+          renderTranscript();
         }
         saveLS('settings', state.settings);
       };
     });
 
-    // 初始化设置选中态
-    document.querySelectorAll('.row[data-setting="level"]').forEach(r => {
-      r.querySelector('.value').classList.toggle('active', r.dataset.value === state.settings.level);
-    });
-    document.querySelectorAll('.row[data-setting="subtitle"]').forEach(r => {
-      r.querySelector('.value').classList.toggle('active', r.dataset.value === state.settings.subtitle);
-    });
-    document.querySelectorAll('.row[data-setting="topic"]').forEach(r => {
+    // 初始化选中态
+    document.querySelectorAll('.row[data-setting="level"]').forEach(r=>r.querySelector('.value').classList.toggle('active', r.dataset.value===state.settings.level));
+    document.querySelectorAll('.row[data-setting="subtitle"]').forEach(r=>r.querySelector('.value').classList.toggle('active', r.dataset.value===state.settings.subtitle));
+    document.querySelectorAll('.row[data-setting="topic"]').forEach(r=>{
       const on = state.settings.topics.includes(r.dataset.value);
-      r.querySelector('.value').textContent = on ? '已选' : '';
+      r.querySelector('.value').textContent = on?'已选':'';
       r.querySelector('.value').classList.toggle('active', on);
     });
 
-    // 每周总结
     $('openWeekly').onclick = () => { closeDrawer(); renderWeekly(); $('weeklyView').classList.add('open'); };
-    // 离线管理
     $('openOffline').onclick = () => { closeDrawer(); renderOffline(); $('offlineView').classList.add('open'); };
+    document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => $(b.dataset.close).classList.remove('open'));
 
-    // 返回按钮
-    document.querySelectorAll('[data-close]').forEach(b => {
-      b.onclick = () => $(b.dataset.close).classList.remove('open');
-    });
-
-    // 清除数据
     $('clearData').onclick = () => {
-      if (confirm('确定清除所有播放记录和设置吗？此操作不可撤销。')) {
+      if (confirm('确定清除所有播放记录和设置吗？')) {
         localStorage.clear();
         state.history = {};
-        state.settings = { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','drama'] };
-        toast('已清除');
-        closeDrawer();
-        renderToday();
+        state.settings = { level:'medium', subtitle:'bilingual', speed:1.0, topics:['daily','news','drama'] };
+        buildPlaylist();
+        toast('已清除'); closeDrawer(); renderToday(); renderNowPlaying(); renderTranscript();
       }
     };
+
+    // 预加载语音列表（iOS 需要）
+    if (synth && synth.getVoices().length === 0) {
+      synth.onvoiceschanged = ()=>{};
+    }
   }
 
-  // 启动
   document.addEventListener('DOMContentLoaded', init);
 })();
 </script>
