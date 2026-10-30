@@ -134,6 +134,40 @@
     color: var(--ink-soft);
     margin-top: 2px;
   }
+  .resume-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 420px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    border-radius: 12px;
+    padding: 11px 14px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  .resume-bar .rb-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+  .resume-bar .rb-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .resume-bar .rb-text b { font-weight: 600; }
+  .resume-bar .rb-time {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
   .goal-done { color: var(--accent); }
 
   /* 当前播放内容卡片 */
@@ -183,18 +217,47 @@
   }
   .progress-bar {
     width: 100%;
-    height: 4px;
+    height: 5px;
     background: var(--line);
-    border-radius: 2px;
+    border-radius: 3px;
     cursor: pointer;
     position: relative;
+    touch-action: none;
+    transition: height 0.18s ease;
+  }
+  /* 加大可触摸热区（视觉仍是细条） */
+  .progress-bar::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    top: -20px; bottom: -20px;
+  }
+  .progress-bar.scrubbing {
+    height: 16px;
   }
   .progress-fill {
-    height: 100%;
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
     background: var(--ink);
-    border-radius: 2px;
+    border-radius: 3px;
     width: 0%;
     transition: width 0.2s linear;
+  }
+  .progress-thumb {
+    position: absolute;
+    top: 50%; left: 0;
+    width: 20px; height: 20px;
+    margin-left: -10px;
+    background: var(--ink);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    transform: translateY(-50%) scale(0);
+    transition: transform 0.18s ease;
+    pointer-events: none;
+  }
+  .progress-bar.scrubbing .progress-thumb {
+    transform: translateY(-50%) scale(1);
   }
   .progress-times {
     display: flex;
@@ -451,6 +514,60 @@
   }
   .offline-card .row .k { font-size: 14px; color: var(--ink-soft); }
   .offline-card .row .v { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cache-section-title {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin: 16px 2px 8px;
+  }
+  .cache-list {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 4px 16px;
+    margin-bottom: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .cache-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .cache-item:last-child { border-bottom: none; }
+  .cache-item .ci-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cache-item .ci-size {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .offline-empty {
+    background: #fff;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .btn.danger {
+    background: transparent;
+    color: #B3483C;
+    border: 1px solid #E4C5C0;
+    margin-top: 4px;
+  }
   .btn {
     background: var(--ink);
     color: var(--bg);
@@ -616,6 +733,12 @@
     <div class="label" id="todayLabel">今日目标 30 分钟</div>
   </div>
 
+  <div class="resume-bar" id="resumeBar" style="display:none">
+    <span class="rb-dot"></span>
+    <span class="rb-text">继续上次：<b id="resumeTitle">--</b></span>
+    <span class="rb-time" id="resumeTime">--</span>
+  </div>
+
   <div class="now-playing" id="nowPlayingCard" style="display:none">
     <div class="np-label">正在播放</div>
     <div class="np-title" id="npTitle">--</div>
@@ -628,6 +751,7 @@
   <div class="progress-wrap" id="progressWrap" style="display:none">
     <div class="progress-bar" id="progressBar">
       <div class="progress-fill" id="progressFill"></div>
+      <div class="progress-thumb" id="progressThumb"></div>
     </div>
     <div class="progress-times">
       <span id="curTime">0:00</span>
@@ -727,44 +851,44 @@
   /* ---------- 内置听力材料（12 段，约 30 分钟） ---------- */
   const MATERIALS = [
     /* === 日常交流 === */
-    { id:'d1', topic:'daily', title:'At a Coffee Shop',
+    { id:'d1', topic:'daily', title:'At a Coffee Shop', audio:'assets/d1.m4a', isAudio:true,
       en:"Hi, welcome to Green Bean Cafe. What can I get for you today? Hi, I'd like a medium latte, please. Sure. Would you like that hot or iced? Hot, please. And would you like any syrup? We have vanilla, caramel, and hazelnut. Just vanilla, one pump, please. Got it. Any pastry to go with that? We have fresh croissants and blueberry muffins. A croissant sounds great. Is it warmed? Yes, I can warm it for you. That would be perfect. Your total is six dollars and forty cents. Can I get your name for the cup? It's Sarah. Thank you, Sarah. Your latte will be ready in just a moment. Thanks so much.",
       zh:'在咖啡店。欢迎来到绿豆咖啡馆，今天想喝点什么？我要一杯中杯拿铁。热的还是冰的？热的。要加糖浆吗？有香草、焦糖和榛果。香草，一泵就好。好的，要不要来点糕点？我们有新鲜可颂和蓝莓玛芬。一个可颂不错，能加热吗？可以的。那就太好了。一共六块四。你叫什么名字？我叫莎拉。谢谢莎拉，你的拿铁马上就好。'},
-    { id:'d2', topic:'daily', title:'Asking for Directions',
+    { id:'d2', topic:'daily', title:'Asking for Directions', audio:'assets/d2.m4a', isAudio:true,
       en:"Excuse me, sorry to bother you. I'm looking for the Central Library. Do you know how to get there? Sure. Go straight down this road for about two blocks. You'll see a big church on the corner. Turn left there, onto Park Street. Keep going for three blocks, and the library will be on your right, across from the post office. Is it within walking distance? Oh yes, about ten minutes on foot. If you don't want to walk, the number seven bus stops right in front of it. How long does the bus take? Maybe five minutes, but you might have to wait. Is there a subway station nearby? The nearest one is Central Station, about a fifteen minute walk from here. Alright, I'll walk. Thank you so much. You're welcome. Good luck!",
       zh:'问路。不好意思打扰一下，我在找中央图书馆，你知道怎么走吗？沿着这条路直走两个街区，在拐角会看到一个大教堂，左转到公园街。再走三个街区，图书馆就在右手边，邮局对面。走路能到吗？能，大概十分钟。不想走的话，7路公交车正好停在门口。公交要多久？五分钟吧，但可能要等。附近有地铁站吗？最近的是中央站，从这走十五分钟。好的，我走过去。非常感谢。不客气，祝你顺利！'},
-    { id:'d3', topic:'daily', title:'Small Talk with a Colleague',
+    { id:'d3', topic:'daily', title:'Small Talk with a Colleague', audio:'assets/d3.m4a', isAudio:true,
       en:"Morning! You're in early today. Yeah, I wanted to beat the traffic. How was your weekend? It was nice. I went hiking with my family on Saturday. The weather was perfect. That sounds lovely. Where did you go? We went to the hills outside the city. It was a bit crowded, but the views were worth it. Did you take any photos? Yeah, I'll show you later. How about you? Did you do anything fun? Mostly just caught up on sleep. I was exhausted from the week. Oh, I hear you. We have that big presentation this afternoon, right? Yeah, at three o'clock. Are you ready? I think so. I've gone through the slides twice already. Great. Let's grab coffee before it starts. My treat. Sounds good. Let's go.",
       zh:'同事寒暄。早啊，你今天来得真早。嗯，想避开堵车。周末过得怎么样？挺好的，周六和家人去爬山了，天气特别好。真不错，你们去哪了？去了城外的山里，人有点多，但风景值了。拍照了吗？拍了，一会给你看。你呢？玩了什么好玩的吗？基本就是补觉，这周太累了。理解。下午三点有那个大汇报对吧？对，三点。你准备好了吗？应该差不多，PPT已经过了两遍。好，我们开始前去喝杯咖啡吧，我请。好啊，走。'},
-    { id:'d4', topic:'daily', title:'Looking for an Apartment',
+    { id:'d4', topic:'daily', title:'Looking for an Apartment', audio:'assets/d4.m4a', isAudio:true,
       en:"Hi, I'm calling about the apartment you listed online. Is it still available? Yes, it is. It's a one bedroom on Main Street. Great. How much is the rent? It's twelve hundred dollars a month, including water. Electricity and internet are extra. Is there a minimum lease? Yes, a twelve month lease. We also require a security deposit of one month's rent. Are pets allowed? We allow cats, but no dogs. Do you have laundry in the building? Yes, there's a laundry room in the basement. And parking? There's a spot in the back lot for an extra fifty dollars a month. Can I come see it this afternoon? Sure, between two and four is fine. I'll send you the address. Perfect. See you then.",
       zh:'租房。你好，我打电话是想问网上那套公寓，还在吗？在的，是主街上的一居室。好的，租金多少？一个月一千二，含水费。电费和网费另算。最少租多久？一年起租，还要一个月押金。可以养宠物吗？可以养猫，不能养狗。楼里有洗衣房吗？地下室有。停车呢？后院车位，每月加五十。我今天下午能看看房吗？可以，两点到四点。我把地址发你。好，一会见。'},
 
     /* === 时事新闻（慢速） === */
-    { id:'n1', topic:'news', title:'Study: Remote Work Boosts Productivity',
+    { id:'n1', topic:'news', title:'Study: Remote Work Boosts Productivity', audio:'assets/n1.m4a', isAudio:true,
       en:"A new study published this week finds that employees who work from home at least three days a week are, on average, thirteen percent more productive than those who work fully in the office. The researchers followed over five hundred workers at a large technology company for six months. They measured productivity by completed projects, meeting efficiency, and self reported satisfaction. The study also found that remote workers took fewer sick days and reported lower stress levels. However, the researchers noted that fully remote workers sometimes felt isolated, and missed informal conversations that often lead to new ideas. The company says it will continue to offer hybrid schedules. Experts say the findings suggest that a flexible approach, rather than a one size fits all policy, may work best for both employers and employees.",
       zh:'远程工作研究。本周发表的一项新研究发现，每周至少在家工作三天的员工，效率比完全坐班的员工平均高百分之十三。研究人员跟踪了一家大型科技公司的五百多名员工，为期六个月。他们通过完成项目数量、会议效率和自我满意度来衡量效率。研究还发现远程员工病假更少、压力水平更低。但研究人员也指出，完全远程的员工有时会感到孤立，也会想念那些常常催生新想法的非正式交流。该公司表示将继续提供混合排班。专家认为，灵活的方式比一刀切政策对雇主和员工都更好。'},
-    { id:'n2', topic:'news', title:'City Launches New Bike Sharing Program',
+    { id:'n2', topic:'news', title:'City Launches New Bike Sharing Program', audio:'assets/n2.m4a', isAudio:true,
       en:"The city transportation department announced Tuesday that a new bike sharing program will launch next month. Residents will be able to unlock one of two thousand bikes using a smartphone app. The first five minutes are free, and after that riders pay fifteen cents per minute. The program aims to reduce traffic congestion and lower carbon emissions. Over one hundred docking stations will be placed near subway stops, parks, and shopping districts. City officials say similar programs in other cities have reduced short car trips by up to twenty percent. However, some residents have raised concerns about bikes being left on sidewalks. In response, the city says it will add extra parking spots and send staff to clear up improperly parked bikes twice a day.",
       zh:'共享单车计划。市交通局周二宣布，一个新的共享单车项目将于下月启动。市民可以用手机 app 解锁两千辆自行车中的任意一辆。前五分钟免费，之后每分钟十五美分。该项目旨在缓解交通拥堵、降低碳排放。地铁站、公园和商业区附近将设一百多个停车点。市政府表示，其他城市的类似项目已使短途驾车出行减少了百分之二十。不过一些居民担心自行车会被随意扔在人行道上。作为回应，市政府表示会增加停车位，并每天两次派工作人员清理乱停的自行车。'},
-    { id:'n3', topic:'news', title:'Weather: Rain Expected This Weekend',
+    { id:'n3', topic:'news', title:'Weather: Rain Expected This Weekend', audio:'assets/n3.m4a', isAudio:true,
       en:"The national weather service is predicting heavy rain across the region this weekend. Forecasters say the storm will arrive late Friday night and continue through Sunday afternoon. Up to eighty millimeters of rain could fall in some areas. Residents are advised to clear gutters and move outdoor furniture indoors. Drivers should expect slippery roads and possible flooding in low lying areas. Schools in several counties have already announced that outdoor events on Saturday will be moved indoors. Next week, the weather is expected to clear up, with sunny skies and temperatures returning to around twenty two degrees. The weather service will update its forecast on Friday morning.",
       zh:'天气预报。国家气象局预测本周末该地区将有大雨。预报员称，风暴将在周五深夜到达，持续到周日下午。部分地区降雨量可能达到八十毫米。建议居民清理排水沟，把户外家具搬进室内。司机应注意路滑，低洼地区可能积水。多个县的学校已宣布周六的户外活动将移至室内。下周天气预计转晴，气温回升到二十二度左右。气象局将在周五早上更新预报。'},
-    { id:'n4', topic:'news', title:'Libraries Add Free Audio Book Service',
+    { id:'n4', topic:'news', title:'Libraries Add Free Audio Book Service', audio:'assets/n4.m4a', isAudio:true,
       en:"Public libraries across the country are expanding their free audio book services. Starting this month, library card holders can borrow up to ten audio books at a time using a new app, with no waiting lists for most popular titles. The program is funded by a three million dollar government grant. Library officials say they noticed a twenty percent increase in audio book borrowing last year, especially among younger readers. The app also includes features that let readers adjust narration speed and set sleep timers. Some critics worry that the service might reduce physical book borrowing, but early data suggests that audio book users also borrow more physical books than before. The service is available to all library members at no extra cost.",
       zh:'图书馆增加免费有声书服务。全国各地的公共图书馆正在扩展免费有声书服务。从本月起，持借书证的读者可以通过一个新 app 同时借阅十本有声书，大多数热门书目无需等待名单。该项目由政府三百万美元拨款资助。图书馆官员表示，他们注意到去年有声书借阅量增长了百分之二十，年轻读者尤其明显。这个 app 还允许读者调节朗读音速、设置睡眠定时。有评论担心这项服务会减少纸质书借阅，但早期数据显示，有声书用户借阅的纸质书也比以前更多。该服务对所有图书馆会员免费开放。'},
 
     /* === 影视精读（剧本对白） === */
-    { id:'f1', topic:'drama', title:'Friends: The One with the Late Text',
+    { id:'f1', topic:'drama', title:'Friends: The One with the Late Text', audio:'assets/f1.m4a', isAudio:true,
       en:"Scene: A coffee shop. RACHEL, ROSS, and MONICA are sitting at a table. RACHEL: Okay, tell me again why you didn't text her back. ROSS: Because! If I text her back right away, she's gonna think I was sitting by my phone. MONICA: You were sitting by your phone. ROSS: That is not the point! The point is, I need to play it cool. RACHEL: Ross, you played cool for three days. She probably thinks you're not interested. ROSS: Wait, is that bad? MONICA: Yes, that is bad. ROSS: Okay, okay, what do I do? RACHEL: You text her. Right now. Say, hey, sorry I missed your call, I was in a meeting. ROSS: That's a lie. I was watching old cartoons. MONICA: And that is exactly why we don't tell her the truth.",
       zh:'老友记：未回短信那一集。场景：咖啡馆。瑞秋、罗斯、莫妮卡坐在桌边。瑞秋：好，再跟我说一遍，你为什么不回她短信。罗斯：因为！我要是马上回，她会觉得我一直守着手机。莫妮卡：你确实一直守着手机。罗斯：重点不是这个！重点是，我得装得淡定一点。瑞秋：罗斯，你已经淡定了三天了，她可能觉得你没意思。罗斯：等等，那很糟吗？莫妮卡：对，非常糟。罗斯：好吧，我该怎么办？瑞秋：现在就给她发短信，说：嘿，抱歉没接到电话，刚才在开会。罗斯：那是撒谎，我在看老动画片。莫妮卡：所以才说不能跟她说实话。'},
-    { id:'f2', topic:'drama', title:'The Office: The Job Interview',
+    { id:'f2', topic:'drama', title:'The Office: The Job Interview', audio:'assets/f2.m4a', isAudio:true,
       en:"MICHAEL: Hello! And welcome to Dunder Mifflin. I'm Michael Scott, regional manager. INTERVIEWER: Nice to meet you, Mr. Scott. Thank you for making time. MICHAEL: Oh, please, call me Michael. So, tell me about yourself. INTERVIEWER: Well, I've been in sales for eight years. MICHAEL: Eight years! That's longer than I've been alive. Just kidding. INTERVIEWER: ...MICHAEL: Okay, serious question. Where do you see yourself in five years? INTERVIEWER: I'd like to be running a small team, maybe in a regional role. MICHAEL: A regional role. Like... mine? INTERVIEWER: I didn't mean it that way. MICHAEL: It's okay. I respect ambition. You know what, you're hired. INTERVIEWER: Just like that? MICHAEL: Hey, I know talent when I see it. Welcome to the team.",
       zh:'办公室：求职面试。迈克尔：你好！欢迎来到 Dundler Mifflin，我是地区经理迈克尔·斯科特。面试官：很高兴见到您，斯科特先生，感谢您拨冗。迈克尔：请叫我迈克尔。跟我说说你自己。面试官：我做销售八年了。迈克尔：八年！比我活的时间都长。开玩笑的。面试官：……迈克尔：好，正经问题。五年后你想做什么？面试官：我想带一个小团队，也许做个地区负责人。迈克尔：地区负责人。比如……我的位置？面试官：我不是那个意思。迈克尔：没关系，我欣赏有野心的人。这样吧，你被录用了。面试官：就这么定了？迈克尔：我一眼就能看出人才。欢迎加入。'},
-    { id:'f3', topic:'drama', title:'Sherlock: The First Meeting',
+    { id:'f3', topic:'drama', title:'Sherlock: The First Meeting', audio:'assets/f3.m4a', isAudio:true,
       en:"JOHN: So, this all seems rather fantastic. You think you can tell all that just by looking at me? SHERLOCK: I can tell you were in Afghanistan. Or Iraq. The pain in your leg says army. The limp is psychosomatic, by the way. JOHN: How on earth could you possibly know that? SHERLOCK: I observe. Most people don't. Your haircut is military. Your posture is military. But you hold yourself like you're in pain. You look down when you walk, not because of the leg, but because you're thinking. JOHN: That's impossible. SHERLOCK: And you have a phone. An expensive phone. But you're clearly not wealthy. Someone gave it to you. JOHN: My sister gave it to me. SHERLOCK: Ah. Estranged. You check it constantly, hoping for a message that will never come. JOHN: ...We should get coffee sometime.",
       zh:'神探夏洛克：初次见面。约翰：这一切也太离谱了。你觉得光看我就能知道这些？夏洛克：我能看出来你在阿富汗待过，或者伊拉克。你腿疼说明你当过兵。顺便说一句，那是心理性的跛行。约翰：你到底怎么知道的？夏洛克：我观察，大多数人不会。你的发型是军人的，站姿也是，但你走路的样子像是在忍痛。你走路时低头，不是因为腿，而是因为在思考。约翰：这不可能。夏洛克：你还有一部手机。很贵的手机，但你显然不富裕，是别人给你的。约翰：我姐姐给的。夏洛克：啊。关系疏远。你不停看手机，希望收到一条永远不会来的消息。约翰：……我们找个时间喝杯咖啡吧。'},
-    { id:'f4', topic:'drama', title:'Modern Family: Family Dinner',
+    { id:'f4', topic:'drama', title:'Modern Family: Family Dinner', audio:'assets/f4.m4a', isAudio:true,
       en:"CLAIRE: Who wants more lasagna? PHIL: I do, but the kids said if I have a third piece they're taking my credit card. LUKE: Dad, you had two plates already. ALEX: Actually, that's three. PHIL: Three? I only remember two. CLAIRE: You have a problem, Phil. PHIL: I have a healthy appreciation for Italian cuisine. LUKE: Can I be excused? I have homework. CLAIRE: You just sat down. Finish your vegetables. LUKE: But they're green. CLAIRE: That's the point. MITCH: Hey, everybody. Sorry we're late. Cam got stuck at the petting zoo. CAM: A goat ate my tie. I had to rescue it. LILY: We brought doughnuts. CLAIRE: Doughnuts? Before dinner? CAM: They're a peace offering.",
       zh:'摩登家庭：家庭晚餐。克莱尔：谁还要千层面？菲尔：我要，但孩子们说我要再吃一块就收走我的信用卡。卢克：爸，你已经吃了两盘了。亚历克斯：其实是三盘。菲尔：三盘？我只记得两盘。克莱尔：菲尔，你有问题。菲尔：我只是对意大利菜有健康的欣赏。卢克：我能离席吗？我有作业。克莱尔：你刚坐下，把菜吃完。卢克：可它们是绿的。克莱尔：所以才让你吃。米奇：大家好，抱歉来晚了，小卡在动物园被卡住了。小卡：一只山羊吃了我的领带，我得去救它。莉莉：我们带了甜甜圈。克莱尔：晚饭前吃甜甜圈？小卡：这是赔礼。'}
   ];
@@ -777,7 +901,8 @@
     playing: false, paused: false,
     wordIdx: 0, totalWords: 0, tickTimer: null,
     accounts: [], activeId: null,
-    newsItems: [], newsDate: ''
+    newsItems: [], newsDate: '',
+    resume: null
   };
 
   /* ---------- 常量 ---------- */
@@ -893,7 +1018,8 @@
       else if (state.newsItems.length) news = state.newsItems; // 离线时用旧缓存
       else news = MATERIALS.filter(m => m.topic === 'news');
     }
-    state.playlist = dailyDrama.concat(news);
+    // 真实音频（CGTN）排前面：iOS 上 audio 元素播放最稳定，一打开就有声
+    state.playlist = news.concat(dailyDrama);
     if (!state.playlist.length) state.playlist = MATERIALS.slice();
     state.currentIndex = 0;
   }
@@ -970,9 +1096,13 @@
     const ep = state.playlist[state.currentIndex];
     if (ep && ep.isAudio) {
       const a = $('audioEl');
-      if (a.paused) {
+      if (!a.paused) { a.pause(); return; }
+      // 已有加载进度 → 继续；否则从上次进度开始（断点续听）
+      if (a.src && a.currentTime > 0) {
         a.play().catch(()=> toast('音频加载失败，请检查网络'));
-      } else a.pause();
+        return;
+      }
+      startFromResume();
       return;
     }
     // TTS 模式
@@ -989,7 +1119,56 @@
     }
   }
 
-  function playEpisode(idx){
+  // 断点续听：找到上次听的条目，从上次位置继续
+  function startFromResume(){
+    const resume = state.resume;
+    let idx = -1;
+    if (resume && resume.epId) {
+      idx = state.playlist.findIndex(x => x.id === resume.epId);
+    }
+    if (idx >= 0) {
+      playEpisode(idx, { resumeTime: resume.time || 0 });
+    } else {
+      playEpisode(state.currentIndex);
+    }
+  }
+
+  function saveResume(){
+    if (!state.activeId) return;
+    const ep = state.playlist[state.currentIndex];
+    const a = $('audioEl');
+    if (ep && ep.isAudio && a.duration && a.currentTime > 3) {
+      const d = curData();
+      d.resume = { epId: ep.id, time: a.currentTime, title: ep.title, updatedAt: Date.now() };
+      saveCurData(d);
+    }
+  }
+
+  function clearResume(){
+    state.resume = null;
+    if (state.activeId) {
+      const d = curData();
+      d.resume = null;
+      saveCurData(d);
+    }
+  }
+
+  function renderResume(){
+    const bar = $('resumeBar');
+    if (!bar) return;
+    const r = state.resume;
+    const playingNow = state.playing && state.resume && state.resume.epId === (state.playlist[state.currentIndex]||{}).id;
+    if (r && r.title && !playingNow) {
+      $('resumeTitle').textContent = r.title;
+      $('resumeTime').textContent = r.time ? fmtTime(r.time) : '开头';
+      bar.style.display = 'flex';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  function playEpisode(idx, opts){
+    opts = opts || {};
     const ep = state.playlist[idx];
     if (!ep) return;
     state.currentIndex = idx;
@@ -1002,14 +1181,21 @@
     a.pause(); a.removeAttribute('src'); a.load();
 
     if (ep.isAudio) {
-      // 真实音频（CGTN）
+      // 真实音频（CGTN / 内置录制）
       a.src = ep.audio;
       a.playbackRate = state.settings.speed;
       a.load();
+      if (opts.resumeTime && opts.resumeTime > 3) {
+        a.addEventListener('loadedmetadata', function h(){
+          a.currentTime = Math.min(opts.resumeTime, a.duration || opts.resumeTime);
+          a.removeEventListener('loadedmetadata', h);
+        }, { once:true });
+      }
       a.play().then(()=>{
         state.playing = true; state.paused = false;
         updatePlayIcon(true);
         startTick();
+        renderResume();
       }).catch(()=>{
         toast('音频加载失败，跳过');
         setTimeout(()=>{ if (!state.playing) next(); }, 1200);
@@ -1021,18 +1207,28 @@
     speakCurrent();
   }
 
+  function ensureVoices(cb){
+    // iOS 上 getVoices() 首次可能为空，等待加载
+    if (!synth || synth.getVoices().length) { if (cb) cb(); return; }
+    let done = false;
+    const finish = () => { if (!done) { done = true; synth.onvoiceschanged = null; if (cb) cb(); } };
+    synth.onvoiceschanged = finish;
+    setTimeout(finish, 500); // 兜底：等不到也继续
+  }
+
   function speakCurrent(){
     const ep = state.playlist[state.currentIndex];
-    if (!ep || !synth) return;
+    if (!ep || !synth) { toast('当前浏览器不支持语音朗读'); return; }
     synth.cancel();
 
     const u = new SpeechSynthesisUtterance(ep.en);
     u.rate = state.settings.speed;
     u.lang = 'en-US';
-    // 尝试选一个英文语音
+    u.volume = 1;
+    u.pitch = 1;
     const voices = synth.getVoices();
-    const enVoice = voices.find(v => v.lang.startsWith('en') && /Google|Samantha|Daniel|Aria|Zira/i.test(v.name)) || voices.find(v => v.lang.startsWith('en'));
-    if (enVoice) u.voice = enVoice;
+    const enVoice = voices.find(v => v.lang.startsWith('en') && /Google|Samantha|Daniel|Aria|Zira|Siri/i.test(v.name)) || voices.find(v => v.lang.startsWith('en'));
+    if (enVoice) u.voice = enVoice; // 找不到就不指定，让系统按 en-US 选
 
     state.totalWords = ep.en.split(/\s+/).length;
     state.wordIdx = 0;
@@ -1041,6 +1237,7 @@
       state.playing = true; state.paused = false;
       updatePlayIcon(true);
       startTick();
+      clearTimeout(u._silentTimer);
     };
     u.onboundary = (e) => {
       if (e.name === 'word') {
@@ -1052,6 +1249,7 @@
       stopTick();
       state.playing = false;
       updatePlayIcon(false);
+      clearTimeout(u._silentTimer);
       markEpisodeDone();
       setTimeout(next, 600);
     };
@@ -1059,9 +1257,19 @@
       stopTick();
       state.playing = false;
       updatePlayIcon(false);
+      clearTimeout(u._silentTimer);
+      toast('朗读失败，试试点下一段');
     };
 
-    synth.speak(u);
+    // iOS 无声检测：2.5 秒未开始朗读则提示排查
+    u._silentTimer = setTimeout(() => {
+      if (!state.playing && !state.paused) {
+        toast('没有声音？1. 检查 iPhone 左侧静音开关 2. 用 Safari 打开 3. 调大音量');
+      }
+    }, 2500);
+
+    // iOS 需要用户手势内触发：先 cancel 再稍后 speak，用 setTimeout 0 保持手势上下文
+    ensureVoices(() => { synth.speak(u); });
     renderNowPlaying();
     renderTranscript();
   }
@@ -1079,12 +1287,14 @@
     if (ep && ep.isAudio) {
       const pct = a.duration ? a.currentTime / a.duration * 100 : 0;
       $('progressFill').style.width = pct + '%';
+      $('progressThumb').style.left = pct + '%';
       $('curTime').textContent = fmtTime(a.currentTime);
       $('durTime').textContent = fmtTime(a.duration);
       return;
     }
     const pct = state.totalWords ? state.wordIdx / state.totalWords * 100 : 0;
     $('progressFill').style.width = pct + '%';
+    $('progressThumb').style.left = pct + '%';
     const total = estDuration(ep||{en:''});
     const cur = Math.round(total * pct / 100);
     $('curTime').textContent = fmtTime(cur);
@@ -1130,6 +1340,8 @@
       if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
       state.history[today].seconds += 1;
       if (state.history[today].seconds % 30 === 0) saveCurData({...curData(), history: state.history});
+      // 每 5 秒存一次断点位置
+      if (state.history[today].seconds % 5 === 0) saveResume();
       renderToday();
     }, 1000);
   }
@@ -1156,7 +1368,7 @@
     const tag = $('npTag');
     tag.textContent = ep.topic==='daily' ? '日常' : ep.topic==='news' ? '新闻' : '影视';
     tag.className = 'tag ' + ep.topic;
-    $('npDuration').textContent = ep.isAudio ? (ep.source||'原声') : '朗读';
+    $('npDuration').textContent = ep.isAudio ? (ep.source ? ep.source : '音频') : '朗读';
     $('progressWrap').style.display = 'block';
     const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
     if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title;
@@ -1269,18 +1481,72 @@
   function renderOffline(){
     const total = MATERIALS.length;
     const newsN = state.newsItems.length;
-    const html =
+    $('offlineContent').innerHTML =
       '<div class="offline-card">'+
         '<div class="row"><span class="k">内置材料</span><span class="v">'+total+' 段</span></div>'+
         '<div class="row"><span class="k">实时新闻（CGTN）</span><span class="v">'+newsN+' 条</span></div>'+
         '<div class="row"><span class="k">新闻更新于</span><span class="v">'+(state.newsDate? state.newsDate.slice(5) : '--')+'</span></div>'+
         '<div class="row"><span class="k">网络状态</span><span class="v">'+(state.offline?'离线':'在线')+'</span></div>'+
       '</div>'+
-      '<div style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin-top:8px">'+
-        '内置材料和朗读功能完全离线可用；CGTN 新闻每次联网自动更新并缓存，<b>离线也能继续听</b>。'+
-        '首次打开后把网页"添加到主屏幕"，飞行模式下也能正常使用。'+
-      '</div>';
-    $('offlineContent').innerHTML = html;
+      '<div class="cache-section-title">已缓存内容（离线可听）</div>'+
+      '<div class="offline-empty" id="cacheLoading">正在读取缓存…</div>';
+    renderCacheList();
+  }
+
+  async function renderCacheList(){
+    const box = $('cacheLoading');
+    if (!box) return;
+    if (!('caches' in window)) {
+      box.className = 'offline-empty';
+      box.innerHTML = '当前浏览器不支持离线缓存';
+      return;
+    }
+    try {
+      const cache = await caches.open('hl_audio');
+      const keys = await cache.keys();
+      if (!keys.length) {
+        box.className = 'offline-empty';
+        box.innerHTML = '还没有缓存。听过的内容会自动保存到手机，之后飞行模式下也能继续听。';
+        return;
+      }
+      const items = await Promise.all(keys.map(async (req) => {
+        const resp = await cache.match(req);
+        let size = 0;
+        if (resp) { try { size = (await resp.clone().blob()).size; } catch(e){} }
+        return { name: decodeURIComponent((req.url.split('/').pop() || '音频')), size, url: req.url };
+      }));
+      const totalMB = items.reduce((s,i)=>s+i.size,0) / 1048576;
+      items.sort((a,b)=>b.size-a.size);
+      const listHtml = items.map(it =>
+        '<div class="cache-item"><div class="ci-name" title="'+esc(it.name)+'">'+esc(it.name)+'</div>'+
+        '<div class="ci-size">'+(it.size/1048576).toFixed(1)+' MB</div></div>'
+      ).join('');
+      box.outerHTML =
+        '<div class="offline-card">'+
+          '<div class="row"><span class="k">缓存条目</span><span class="v">'+items.length+' 个</span></div>'+
+          '<div class="row"><span class="k">缓存总量</span><span class="v">'+totalMB.toFixed(1)+' MB</span></div>'+
+        '</div>'+
+        '<div class="cache-list">'+listHtml+'</div>'+
+        '<button class="btn danger" id="clearCacheBtn">清除全部离线缓存</button>';
+      const clearBtn = $('clearCacheBtn');
+      if (clearBtn) clearBtn.onclick = clearAllAudioCache;
+    } catch(e) {
+      box.className = 'offline-empty';
+      box.innerHTML = '缓存信息暂不可用';
+    }
+  }
+
+  async function clearAllAudioCache(){
+    try {
+      if (!('caches' in window)) return;
+      const cache = await caches.open('hl_audio');
+      const keys = await cache.keys();
+      await Promise.all(keys.map(k => cache.delete(k)));
+      toast('已清除 '+keys.length+' 个缓存文件');
+      renderOffline();
+    } catch(e) {
+      toast('清除失败，请重试');
+    }
   }
 
   /* ================= 账号系统 ================= */
@@ -1398,12 +1664,13 @@
     state.history = d.history||{};
     state.newsItems = (d.newsCache && d.newsCache.items) ? d.newsCache.items : [];
     state.newsDate = (d.newsCache && d.newsCache.date) ? d.newsCache.date : '';
+    state.resume = d.resume || null;
     state.settings.speed = state.settings.speed || 1.0;
     state.settings.topics = state.settings.topics || ['daily','news','drama'];
     buildPlaylist();
     $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'')+'x';
     syncSettingUI();
-    renderNowPlaying(); renderToday(); renderTranscript(); renderAccountName();
+    renderNowPlaying(); renderToday(); renderTranscript(); renderAccountName(); renderResume();
     if (navigator.onLine !== false) {
       const lastFetch = loadLS('last_news_fetch','');
       const h = Math.floor(Date.now()/3600000);
@@ -1458,17 +1725,42 @@
   function bindEvents(){
     $('playBtn').onclick = togglePlay;
 
-    $('progressBar').onclick = (e) => {
+    // 进度条：点击跳转 + 触摸/拖动（触摸时条变粗、显示圆手柄）
+    const bar = $('progressBar');
+    let scrubbing = false;
+    function barPct(clientX){
+      const rect = bar.getBoundingClientRect();
+      return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    }
+    function seekByPct(pct){
       const ep = state.playlist[state.currentIndex];
       const a = $('audioEl');
       if (ep && ep.isAudio && a.duration) {
-        const rect = e.currentTarget.getBoundingClientRect();
-        a.currentTime = ((e.clientX - rect.left) / rect.width) * a.duration;
+        a.currentTime = pct * a.duration;
         updateProgress();
-      } else {
-        toast('朗读内容不支持拖动，可点上一段/下一段');
+        saveResume();
+        return true;
       }
+      return false;
+    }
+    bar.addEventListener('pointerdown', (e) => {
+      if (!seekByPct(barPct(e.clientX))) { toast('朗读内容不支持拖动，可点上一段/下一段'); return; }
+      scrubbing = true;
+      bar.classList.add('scrubbing');
+      try { bar.setPointerCapture(e.pointerId); } catch(err){}
+      e.preventDefault();
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (!scrubbing) return;
+      seekByPct(barPct(e.clientX));
+    });
+    const endScrub = () => {
+      if (!scrubbing) return;
+      scrubbing = false;
+      bar.classList.remove('scrubbing');
     };
+    bar.addEventListener('pointerup', endScrub);
+    bar.addEventListener('pointercancel', endScrub);
 
     $('nextBtn').onclick = next;
     $('prevBtn').onclick = prev;
@@ -1480,18 +1772,27 @@
     a.addEventListener('play', () => {
       state.playing = true; state.paused = false;
       updatePlayIcon(true); startTick();
+      renderResume();
     });
     a.addEventListener('pause', () => {
       // 切换条目时 state.playing 已被重置，此处避免误判
       if (state.playing) {
         state.playing = false;
         updatePlayIcon(false); stopTick();
+        saveResume();
       }
     });
     a.addEventListener('timeupdate', updateProgress);
     a.addEventListener('ended', () => {
       stopTick(); state.playing = false; updatePlayIcon(false);
       markEpisodeDone();
+      // 下一段开头作为新的续听点
+      const nextIdx = (state.currentIndex + 1) % state.playlist.length;
+      const nextEp = state.playlist[nextIdx];
+      if (nextEp && state.activeId) {
+        state.resume = { epId: nextEp.id, time: 0, title: nextEp.title, updatedAt: Date.now() };
+        const d = curData(); d.resume = state.resume; saveCurData(d);
+      }
       setTimeout(next, 600);
     });
     a.addEventListener('error', () => {
