@@ -5,7 +5,7 @@
    - RSS/API 请求：网络优先（拿最新内容）
 */
 
-const CACHE_STATIC = 'hl_static_v1';
+const CACHE_STATIC = 'hl_static_v2';
 const CACHE_AUDIO = 'hl_audio';
 const STATIC_ASSETS = [
   './index.html',

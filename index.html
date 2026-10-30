@@ -497,6 +497,91 @@
     padding: 20px;
   }
 
+  /* ===== 账号视图 ===== */
+  .account-hero {
+    text-align: center;
+    padding: 30px 0 10px;
+  }
+  .avatar {
+    width: 76px; height: 76px;
+    border-radius: 50%;
+    margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 600;
+    color: #fff;
+  }
+  .account-hero .a-name {
+    font-size: 18px; font-weight: 600;
+  }
+  .account-hero .a-id {
+    font-size: 12px; color: var(--ink-faint);
+    margin-top: 2px;
+  }
+  .field {
+    margin: 16px 0 10px;
+  }
+  .field label {
+    display: block;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+  .field input[type="text"] {
+    width: 100%;
+    height: 46px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 16px;
+    padding: 0 14px;
+    color: var(--ink);
+    outline: none;
+  }
+  .field input[type="text"]:focus { border-color: var(--accent); }
+  .color-row {
+    display: flex; gap: 16px;
+    justify-content: center;
+    padding: 6px 0;
+  }
+  .color-dot {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .color-dot.sel { border-color: var(--ink); transform: scale(1.1); }
+  .acct-list { margin-top: 4px; }
+  .acct-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .acct-item .mini-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 16px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .acct-item .acct-info { flex: 1; min-width: 0; }
+  .acct-item .acct-info .n { font-size: 15px; font-weight: 500; }
+  .acct-item .acct-info .d { font-size: 12px; color: var(--ink-faint); }
+  .acct-item .check {
+    color: var(--accent); font-size: 18px; font-weight: 700;
+    visibility: hidden;
+  }
+  .acct-item.active .check { visibility: visible; }
+  .btn.ghost { margin-top: 12px; }
+  .hint-text {
+    font-size: 12px;
+    color: var(--ink-faint);
+    line-height: 1.7;
+    margin-top: 16px;
+    padding: 0 4px;
+  }
+  .hidden-file { display: none; }
+
   /* 桌面端微调 */
   @media (min-width: 768px) {
     .home { padding-top: 60px; }
@@ -572,6 +657,9 @@
 <!-- 功能抽屉 -->
 <div class="drawer-mask" id="drawerMask"></div>
 <aside class="drawer" id="drawer">
+  <h3>我的账号</h3>
+  <div class="row" id="openAccount"><span class="label">账号</span><span class="value" id="accountName">--</span></div>
+
   <h3>听力难度</h3>
   <div class="row" data-setting="level" data-value="easy"><span class="label">初级</span><span class="value">A2</span></div>
   <div class="row" data-setting="level" data-value="medium"><span class="label">中等</span><span class="value active">B1-B2</span></div>
@@ -593,6 +681,15 @@
   <div class="row" id="clearData"><span class="label" style="color:var(--warn)">清除全部数据</span><span class="value">›</span></div>
 </aside>
 
+<!-- 账号视图（创建 / 管理） -->
+<div class="view" id="accountView">
+  <div class="view-header">
+    <button class="back" data-close="accountView"><svg viewBox="0 0 24 24"><polyline points="15,18 9,12 15,6"/></svg></button>
+    <h2 id="accountViewTitle">我的账号</h2>
+  </div>
+  <div id="accountContent"></div>
+</div>
+
 <!-- 每周总结视图 -->
 <div class="view" id="weeklyView">
   <div class="view-header">
@@ -612,6 +709,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<audio id="audioEl" preload="none"></audio>
 
 <script>
 /* ============================================================
@@ -677,56 +775,207 @@
     playlist: [], currentIndex: 0,
     history: {}, offline: false,
     playing: false, paused: false,
-    wordIdx: 0, totalWords: 0, tickTimer: null
+    wordIdx: 0, totalWords: 0, tickTimer: null,
+    accounts: [], activeId: null,
+    newsItems: [], newsDate: ''
   };
+
+  /* ---------- 常量 ---------- */
+  const ACCOUNT_COLORS = ['#2D5A3D','#3A5B8C','#8C4A3A','#6B3A6B'];
+  const CONTENT_VERSION = '2026-10-30';
+  const CGTN_FEEDS = [
+    'https://news.cgtn.com/rss/documentary/CGTN-Documentary.rss',
+    'https://news.cgtn.com/rss/sportstalk/sportstalk.rss'
+  ];
+
+  /* ---------- 账号存储 ---------- */
+  function loadAccounts(){ return loadLSRaw('hl_accounts', []); }
+  function saveAccounts(list){ saveLSRaw('hl_accounts', list); }
+  function getActiveId(){ return loadLSRaw('hl_active', null); }
+  function setActiveId(id){ saveLSRaw('hl_active', id); }
+  function dataKey(id){ return 'hl_data_'+id; }
+  function loadData(id){ return loadLSRaw(dataKey(id), { settings:{}, history:{}, newsCache:null }); }
+  function saveData(id, data){ saveLSRaw(dataKey(id), data); }
+  function curData(){ return loadData(state.activeId); }
+  function saveCurData(d){ if (state.activeId) saveData(state.activeId, d); }
+  function loadLSRaw(k,d){ try{const v=localStorage.getItem(k); return v?JSON.parse(v):d;}catch(e){return d;} }
+  function saveLSRaw(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} }
 
   /* ---------- 工具 ---------- */
   function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function fmtTime(sec){ if(!sec||isNaN(sec))return '0:00'; sec=Math.floor(sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
   function fmtMin(sec){ return Math.round(sec/60); }
-  function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2000); }
-  function loadLS(k,d){ try{const v=localStorage.getItem('hl_'+k); return v?JSON.parse(v):d;}catch(e){return d;} }
-  function saveLS(k,v){ try{localStorage.setItem('hl_'+k,JSON.stringify(v));}catch(e){} }
+  function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
+  function loadLS(k,d){ return loadLSRaw('hl_'+k, d); }
+  function saveLS(k,v){ saveLSRaw('hl_'+k, v); }
   function estDuration(ep){ return Math.round(ep.en.split(/\s+/).length / (WORDS_PER_MIN * state.settings.speed) * 60); }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   /* ---------- 初始化 ---------- */
   function init(){
-    state.settings = Object.assign(state.settings, loadLS('settings', {}));
-    state.history = loadLS('history', {});
+    // 账号系统
+    state.accounts = loadAccounts();
+    state.activeId = getActiveId();
+    if (state.activeId && !state.accounts.find(a => a.id === state.activeId)) {
+      state.activeId = null; setActiveId(null);
+    }
+    // 首次：迁移旧数据到新账号（之前无账号时的数据）
+    if (!state.accounts.length) {
+      const legacySettings = loadLS('settings', null);
+      const legacyHistory = loadLS('history', null);
+      if (legacySettings || legacyHistory) {
+        const acc = { id: uid(), name: '我的账号', color: ACCOUNT_COLORS[0], createdAt: Date.now() };
+        state.accounts = [acc]; state.activeId = acc.id;
+        saveAccounts(state.accounts); setActiveId(acc.id);
+        const d = { settings: legacySettings||{}, history: legacyHistory||{}, newsCache: null };
+        saveData(acc.id, d);
+      }
+    }
+
+    if (!state.activeId) {
+      // 无账号：先展示创建账号
+      bindEvents();
+      renderToday();
+      renderAccount(true);
+      $('accountView').classList.add('open');
+      // 也启动 PWA/网络监听
+      setupEnv();
+      return;
+    }
+
+    // 已有账号：加载该账号数据
+    const d = curData();
+    state.settings = Object.assign(state.settings, d.settings||{});
+    state.history = d.history||{};
+    state.newsItems = (d.newsCache && d.newsCache.items) ? d.newsCache.items : [];
+    state.newsDate = (d.newsCache && d.newsCache.date) ? d.newsCache.date : '';
 
     const now = new Date();
     const days = ['周日','周一','周二','周三','周四','周五','周六'];
     $('topDate').textContent = (now.getMonth()+1)+'月'+now.getDate()+'日 '+days[now.getDay()];
 
-    // 根据主题偏好组装播放列表
     buildPlaylist();
-
     bindEvents();
     renderNowPlaying();
     renderToday();
     renderTranscript();
+    renderAccountName();
 
-    // PWA
+    setupEnv();
+
+    // 联网时拉取最新 CGTN 新闻（每 6 小时最多一次）
+    if (navigator.onLine !== false) {
+      const lastFetch = loadLS('last_news_fetch', '');
+      const h = Math.floor(Date.now()/3600000);
+      if (lastFetch !== String(h)) fetchCGTNNews();
+    }
+    checkVersion();
+  }
+
+  function setupEnv(){
     if ('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')) {
       navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
-    window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); });
+    window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); if (state.activeId) fetchCGTNNews(); });
     window.addEventListener('offline', ()=>{ state.offline=true; toast('已离线，可继续收听'); });
-
-    // 检查语音支持
-    if (!synth) toast('当前浏览器不支持语音朗读');
+    if (!synth && !$('audioEl')) toast('当前浏览器不支持语音朗读');
   }
+
+  function uid(){ return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
   function buildPlaylist(){
     const topics = state.settings.topics;
-    state.playlist = MATERIALS.filter(m => topics.includes(m.topic));
+    const dailyDrama = MATERIALS.filter(m => topics.includes(m.topic));
+    // 新闻：优先今日拉取的 CGTN，其次缓存，最后内置
+    let news = [];
+    if (topics.includes('news')) {
+      if (state.newsItems.length && state.newsDate === todayStr()) news = state.newsItems;
+      else if (state.newsItems.length) news = state.newsItems; // 离线时用旧缓存
+      else news = MATERIALS.filter(m => m.topic === 'news');
+    }
+    state.playlist = dailyDrama.concat(news);
     if (!state.playlist.length) state.playlist = MATERIALS.slice();
     state.currentIndex = 0;
   }
 
-  /* ---------- 播放控制（TTS） ---------- */
+  /* ---------- CGTN 实时新闻拉取 ---------- */
+  async function fetchCGTNNews(){
+    saveLS('last_news_fetch', String(Math.floor(Date.now()/3600000)));
+    if (state.offline) return;
+    const items = [];
+    for (const feedUrl of CGTN_FEEDS) {
+      try {
+        const resp = await fetch(feedUrl, { cache: 'no-store' });
+        if (!resp.ok) continue;
+        const xml = await resp.text();
+        const doc = new DOMParser().parseFromString(xml, 'text/xml');
+        const entries = doc.querySelectorAll('item');
+        for (let i = 0; i < Math.min(3, entries.length); i++) {
+          const it = entries[i];
+          const title = (it.querySelector('title')?.textContent || '').trim();
+          const enc = it.querySelector('enclosure');
+          const audio = enc ? enc.getAttribute('url') : '';
+          if (!audio) continue;
+          const desc = (it.querySelector('description')?.textContent || '').replace(/<[^>]+>/g,'').replace(/\[.*?\]/g,'').trim();
+          items.push({
+            id: 'cgtn_' + i + '_' + Date.now(),
+            topic: 'news',
+            title: title.replace(/^CGTN\s*/,'').substring(0,80),
+            audio: audio,
+            en: desc.substring(0, 700) || title,
+            zh: '（CGTN 英文原声节目 · 暂无中文翻译）',
+            isAudio: true, source: 'CGTN'
+          });
+        }
+      } catch(e) { console.warn('CGTN fetch failed', e); }
+    }
+    if (items.length) {
+      state.newsItems = items;
+      state.newsDate = todayStr();
+      const d = curData();
+      d.newsCache = { date: state.newsDate, items: items };
+      saveCurData(d);
+      // 预缓存音频（Service Worker）
+      items.forEach(ep => {
+        if (window.caches && ep.audio) {
+          fetch(ep.audio, {mode:'cors'}).then(r => {
+            if (r.ok) caches.open('hl_audio').then(c => c.put(ep.audio, r));
+          }).catch(()=>{});
+        }
+      });
+      if (state.settings.topics.includes('news')) {
+        buildPlaylist();
+        renderNowPlaying();
+        toast('新闻已更新至最新');
+      }
+    }
+  }
+
+  /* ---------- 版本检查（每周内容更新提示） ---------- */
+  function checkVersion(){
+    try {
+      fetch('https://raw.githubusercontent.com/xia706535495-bot/english-listening/main/version.json', {cache:'no-store'})
+        .then(r => r.ok ? r.json() : null)
+        .then(j => {
+          if (j && j.version && j.version !== CONTENT_VERSION) {
+            toast('本周内容已更新，刷新页面获取');
+          }
+        }).catch(()=>{});
+    } catch(e){}
+  }
+
+  /* ---------- 播放控制（音频 / TTS 双模式） ---------- */
   function togglePlay(){
     if (!state.playlist.length) return;
+    const ep = state.playlist[state.currentIndex];
+    if (ep && ep.isAudio) {
+      const a = $('audioEl');
+      if (a.paused) {
+        a.play().catch(()=> toast('音频加载失败，请检查网络'));
+      } else a.pause();
+      return;
+    }
+    // TTS 模式
     if (state.playing && !state.paused) {
       synth.pause();
       state.paused = true;
@@ -740,6 +989,38 @@
     }
   }
 
+  function playEpisode(idx){
+    const ep = state.playlist[idx];
+    if (!ep) return;
+    state.currentIndex = idx;
+    // 先停掉当前所有播放
+    stopTick();
+    state.playing = false;
+    updatePlayIcon(false);
+    try { synth.cancel(); } catch(e){}
+    const a = $('audioEl');
+    a.pause(); a.removeAttribute('src'); a.load();
+
+    if (ep.isAudio) {
+      // 真实音频（CGTN）
+      a.src = ep.audio;
+      a.playbackRate = state.settings.speed;
+      a.load();
+      a.play().then(()=>{
+        state.playing = true; state.paused = false;
+        updatePlayIcon(true);
+        startTick();
+      }).catch(()=>{
+        toast('音频加载失败，跳过');
+        setTimeout(()=>{ if (!state.playing) next(); }, 1200);
+      });
+      renderNowPlaying();
+      renderTranscript();
+      return;
+    }
+    speakCurrent();
+  }
+
   function speakCurrent(){
     const ep = state.playlist[state.currentIndex];
     if (!ep || !synth) return;
@@ -750,7 +1031,7 @@
     u.lang = 'en-US';
     // 尝试选一个英文语音
     const voices = synth.getVoices();
-    const enVoice = voices.find(v => v.lang.startsWith('en') && /Google|Samantha|Daniel/i.test(v.name)) || voices.find(v => v.lang.startsWith('en'));
+    const enVoice = voices.find(v => v.lang.startsWith('en') && /Google|Samantha|Daniel|Aria|Zira/i.test(v.name)) || voices.find(v => v.lang.startsWith('en'));
     if (enVoice) u.voice = enVoice;
 
     state.totalWords = ep.en.split(/\s+/).length;
@@ -793,9 +1074,17 @@
   }
 
   function updateProgress(){
+    const ep = state.playlist[state.currentIndex];
+    const a = $('audioEl');
+    if (ep && ep.isAudio) {
+      const pct = a.duration ? a.currentTime / a.duration * 100 : 0;
+      $('progressFill').style.width = pct + '%';
+      $('curTime').textContent = fmtTime(a.currentTime);
+      $('durTime').textContent = fmtTime(a.duration);
+      return;
+    }
     const pct = state.totalWords ? state.wordIdx / state.totalWords * 100 : 0;
     $('progressFill').style.width = pct + '%';
-    const ep = state.playlist[state.currentIndex];
     const total = estDuration(ep||{en:''});
     const cur = Math.round(total * pct / 100);
     $('curTime').textContent = fmtTime(cur);
@@ -803,16 +1092,18 @@
   }
 
   function next(){
-    if (state.playing) synth.cancel();
-    stopTick();
+    try { synth.cancel(); } catch(e){}
+    const a = $('audioEl');
+    a.pause();
     state.currentIndex = (state.currentIndex + 1) % state.playlist.length;
-    speakCurrent();
+    playEpisode(state.currentIndex);
   }
   function prev(){
-    if (state.playing) synth.cancel();
-    stopTick();
+    try { synth.cancel(); } catch(e){}
+    const a = $('audioEl');
+    a.pause();
     state.currentIndex = (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
-    speakCurrent();
+    playEpisode(state.currentIndex);
   }
 
   function cycleSpeed(){
@@ -820,9 +1111,14 @@
     const cur = speeds.indexOf(state.settings.speed);
     state.settings.speed = speeds[(cur+1) % speeds.length];
     $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'') + 'x';
-    saveLS('settings', state.settings);
-    // 重新朗读当前段以应用新语速
-    if (state.playing || state.paused) speakCurrent();
+    saveCurData({...curData(), settings: state.settings});
+    // 重新应用语速
+    const ep = state.playlist[state.currentIndex];
+    if (ep && ep.isAudio) {
+      $('audioEl').playbackRate = state.settings.speed;
+    } else if (state.playing || state.paused) {
+      speakCurrent();
+    }
   }
 
   /* ---------- 播放计时 ---------- */
@@ -833,7 +1129,7 @@
       const today = todayStr();
       if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
       state.history[today].seconds += 1;
-      if (state.history[today].seconds % 30 === 0) saveLS('history', state.history);
+      if (state.history[today].seconds % 30 === 0) saveCurData({...curData(), history: state.history});
       renderToday();
     }, 1000);
   }
@@ -844,9 +1140,10 @@
     const today = todayStr();
     if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
     if (!state.history[today].items.find(i => i.id === ep.id)) {
-      state.history[today].items.push({ id:ep.id, title:ep.title, sec:estDuration(ep), done:true });
+      const sec = ep.isAudio ? Math.round(($('audioEl').duration||0)/60) : estDuration(ep);
+      state.history[today].items.push({ id:ep.id, topic:ep.topic, title:ep.title, sec:sec||1, done:true });
     }
-    saveLS('history', state.history);
+    saveCurData({...curData(), history: state.history});
   }
 
   /* ---------- 渲染 ---------- */
@@ -859,6 +1156,7 @@
     const tag = $('npTag');
     tag.textContent = ep.topic==='daily' ? '日常' : ep.topic==='news' ? '新闻' : '影视';
     tag.className = 'tag ' + ep.topic;
+    $('npDuration').textContent = ep.isAudio ? (ep.source||'原声') : '朗读';
     $('progressWrap').style.display = 'block';
     const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
     if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title;
@@ -917,8 +1215,11 @@
     }
     // 主题按本周听过的条目累计
     episodeList.forEach(it => {
-      const m = MATERIALS.find(x => x.id === it.id);
-      if (m && topicSecs[m.topic] !== undefined) topicSecs[m.topic] += (it.sec||180);
+      if (it.topic && topicSecs[it.topic] !== undefined) topicSecs[it.topic] += (it.sec||180);
+      else {
+        const m = MATERIALS.find(x => x.id === it.id);
+        if (m && topicSecs[m.topic] !== undefined) topicSecs[m.topic] += (it.sec||180);
+      }
     });
     const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama || 1;
     const totalMin = fmtMin(totalSec);
@@ -967,17 +1268,190 @@
   /* ---------- 离线管理 ---------- */
   function renderOffline(){
     const total = MATERIALS.length;
+    const newsN = state.newsItems.length;
     const html =
       '<div class="offline-card">'+
         '<div class="row"><span class="k">内置材料</span><span class="v">'+total+' 段</span></div>'+
-        '<div class="row"><span class="k">今日播放列表</span><span class="v">'+state.playlist.length+' 段</span></div>'+
+        '<div class="row"><span class="k">实时新闻（CGTN）</span><span class="v">'+newsN+' 条</span></div>'+
+        '<div class="row"><span class="k">新闻更新于</span><span class="v">'+(state.newsDate? state.newsDate.slice(5) : '--')+'</span></div>'+
         '<div class="row"><span class="k">网络状态</span><span class="v">'+(state.offline?'离线':'在线')+'</span></div>'+
       '</div>'+
       '<div style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin-top:8px">'+
-        '所有听力材料和朗读功能都内置在页面里，<b>完全不需要网络</b>。'+
-        '首次打开后，把网页"添加到主屏幕"，之后飞行模式下也能正常听。'+
+        '内置材料和朗读功能完全离线可用；CGTN 新闻每次联网自动更新并缓存，<b>离线也能继续听</b>。'+
+        '首次打开后把网页"添加到主屏幕"，飞行模式下也能正常使用。'+
       '</div>';
     $('offlineContent').innerHTML = html;
+  }
+
+  /* ================= 账号系统 ================= */
+  function renderAccountName(){
+    const acc = state.accounts.find(a => a.id === state.activeId);
+    $('accountName').textContent = acc ? acc.name : '创建账号';
+  }
+
+  function renderAccount(forceCreate){
+    const hasAccount = state.activeId && state.accounts.length;
+    if (!forceCreate && hasAccount) {
+      $('accountViewTitle').textContent = '我的账号';
+      const acc = state.accounts.find(a => a.id === state.activeId);
+      let listHtml = '';
+      state.accounts.forEach(a => {
+        const active = a.id === state.activeId;
+        listHtml += '<div class="acct-item'+(active?' active':'')+'" data-accid="'+a.id+'">'+
+          '<div class="mini-avatar" style="background:'+a.color+'">'+esc(a.name.charAt(0))+'</div>'+
+          '<div class="acct-info"><div class="n">'+esc(a.name)+'</div>'+
+          '<div class="d">'+(active?'当前使用':'点击切换')+'</div></div>'+
+          '<div class="check">✓</div></div>';
+      });
+      $('accountContent').innerHTML =
+        '<div class="account-hero">'+
+          '<div class="avatar" style="background:'+acc.color+'">'+esc(acc.name.charAt(0))+'</div>'+
+          '<div class="a-name">'+esc(acc.name)+'</div>'+
+          '<div class="a-id">账号 '+acc.id.slice(-4).toUpperCase()+'</div>'+
+        '</div>'+
+        '<div class="section-title">账号列表</div>'+
+        '<div class="acct-list">'+listHtml+'</div>'+
+        '<button class="btn" id="accNewBtn">新建账号</button>'+
+        '<button class="btn ghost" id="accExportBtn">导出备份（换手机用）</button>'+
+        '<button class="btn ghost" id="accImportBtn">导入备份</button>'+
+        '<input type="file" id="accImportFile" class="hidden-file" accept=".json,application/json">'+
+        '<div class="hint-text">备份文件包含你的播放记录和设置。换手机/重装后，打开同一个网址，点"导入备份"选择文件即可恢复。</div>';
+      // 绑定
+      document.querySelectorAll('.acct-item').forEach(el => {
+        el.onclick = () => switchAccount(el.dataset.accid);
+      });
+      $('accNewBtn').onclick = () => renderAccount(true);
+      $('accExportBtn').onclick = exportBackup;
+      $('accImportBtn').onclick = () => $('accImportFile').click();
+      $('accImportFile').onchange = (e) => { if (e.target.files[0]) importBackup(e.target.files[0]); e.target.value=''; };
+      return;
+    }
+    // 创建模式
+    $('accountViewTitle').textContent = '创建你的听力账号';
+    let colorDots = '';
+    ACCOUNT_COLORS.forEach((c,i) => {
+      colorDots += '<div class="color-dot'+(i===0?' sel':'')+'" data-color="'+c+'" style="background:'+c+'"></div>';
+    });
+    $('accountContent').innerHTML =
+      '<div class="account-hero">'+
+        '<div class="avatar" id="accAvatar" style="background:'+ACCOUNT_COLORS[0]+'">我</div>'+
+        '<div class="a-name">专属听力账号</div>'+
+        '<div class="a-id">你的进度、设置、记录都存这里</div>'+
+      '</div>'+
+      '<div class="field"><label>你的昵称</label><input type="text" id="accNameInput" maxlength="10" placeholder="给自己起个名字"></div>'+
+      '<div class="field"><label>头像颜色</label><div class="color-row" id="accColorRow">'+colorDots+'</div></div>'+
+      '<button class="btn" id="accCreateBtn">创建并开始听力</button>'+
+      '<div class="hint-text">创建后数据保存在这台设备上，可随时在"账号"里导出备份。</div>';
+    let pickedColor = ACCOUNT_COLORS[0];
+    document.querySelectorAll('#accColorRow .color-dot').forEach(d => {
+      d.onclick = () => {
+        document.querySelectorAll('#accColorRow .color-dot').forEach(x=>x.classList.remove('sel'));
+        d.classList.add('sel'); pickedColor = d.dataset.color;
+        $('accAvatar').style.background = pickedColor;
+      };
+    });
+    $('accNameInput').oninput = () => {
+      const n = $('accNameInput').value.trim() || '我';
+      $('accAvatar').textContent = n.charAt(0);
+    };
+    $('accCreateBtn').onclick = () => {
+      const name = $('accNameInput').value.trim() || '我的账号';
+      createAccount(name, pickedColor);
+    };
+  }
+
+  function createAccount(name, color){
+    const acc = { id: uid(), name: name, color: color, createdAt: Date.now() };
+    state.accounts.push(acc);
+    saveAccounts(state.accounts);
+    setActiveId(acc.id);
+    state.activeId = acc.id;
+    const d = { settings: {}, history: {}, newsCache: null };
+    saveData(acc.id, d);
+    $('accountView').classList.remove('open');
+    toast('账号已创建，欢迎 ' + name);
+    applyActiveAccount();
+    checkVersion();
+  }
+
+  function switchAccount(id){
+    if (id === state.activeId) return;
+    // 保存当前账号状态
+    const d = curData();
+    d.settings = state.settings; d.history = state.history; d.newsCache = { date: state.newsDate, items: state.newsItems };
+    saveCurData(d);
+    // 停止播放
+    stopTick(); state.playing = false; state.paused = false;
+    try { synth.cancel(); } catch(e){}
+    const a = $('audioEl'); a.pause(); a.removeAttribute('src'); a.load();
+    updatePlayIcon(false);
+    // 切换
+    setActiveId(id); state.activeId = id;
+    $('accountView').classList.remove('open');
+    toast('已切换到 ' + (state.accounts.find(x=>x.id===id)||{}).name);
+    applyActiveAccount();
+  }
+
+  function applyActiveAccount(){
+    const d = curData();
+    state.settings = Object.assign({level:'medium',subtitle:'bilingual',speed:1.0,topics:['daily','news','drama']}, d.settings||{});
+    state.history = d.history||{};
+    state.newsItems = (d.newsCache && d.newsCache.items) ? d.newsCache.items : [];
+    state.newsDate = (d.newsCache && d.newsCache.date) ? d.newsCache.date : '';
+    state.settings.speed = state.settings.speed || 1.0;
+    state.settings.topics = state.settings.topics || ['daily','news','drama'];
+    buildPlaylist();
+    $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'')+'x';
+    syncSettingUI();
+    renderNowPlaying(); renderToday(); renderTranscript(); renderAccountName();
+    if (navigator.onLine !== false) {
+      const lastFetch = loadLS('last_news_fetch','');
+      const h = Math.floor(Date.now()/3600000);
+      if (lastFetch !== String(h)) fetchCGTNNews();
+    }
+  }
+
+  function exportBackup(){
+    const data = { app:'daily-listening', version:1, exportedAt: new Date().toISOString(), accounts: state.accounts, active: state.activeId };
+    const blobs = {};
+    state.accounts.forEach(a => { blobs[a.id] = loadData(a.id); });
+    data.data = blobs;
+    const json = JSON.stringify(data, null, 2);
+    const acc = state.accounts.find(a => a.id === state.activeId) || { name:'我的账号' };
+    const fname = '听力备份-' + acc.name + '-' + todayStr() + '.json';
+    const blob = new Blob([json], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 800);
+    toast('备份已导出');
+  }
+
+  function importBackup(file){
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data.app || data.app !== 'daily-listening' || !data.accounts || !data.data) {
+          toast('不是有效的备份文件'); return;
+        }
+        if (!confirm('导入将覆盖当前设备上的全部数据，确定继续？')) return;
+        // 写入账号与数据
+        saveAccounts(data.accounts);
+        Object.keys(data.data).forEach(id => saveData(id, data.data[id]));
+        const active = data.accounts.find(a => a.id === data.active);
+        if (active) setActiveId(active.id);
+        else if (data.accounts.length) { setActiveId(data.accounts[0].id); data.active = data.accounts[0].id; }
+        // 重新加载
+        state.accounts = loadAccounts();
+        state.activeId = getActiveId();
+        $('accountView').classList.remove('open');
+        toast('导入成功');
+        applyActiveAccount();
+      } catch(e) { toast('导入失败，文件已损坏'); }
+    };
+    reader.readAsText(file);
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -985,14 +1459,45 @@
     $('playBtn').onclick = togglePlay;
 
     $('progressBar').onclick = (e) => {
-      // TTS 不能精确跳转，只做提示
-      toast('拖动进度暂不支持，可点上一段/下一段切换');
+      const ep = state.playlist[state.currentIndex];
+      const a = $('audioEl');
+      if (ep && ep.isAudio && a.duration) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        a.currentTime = ((e.clientX - rect.left) / rect.width) * a.duration;
+        updateProgress();
+      } else {
+        toast('朗读内容不支持拖动，可点上一段/下一段');
+      }
     };
 
     $('nextBtn').onclick = next;
     $('prevBtn').onclick = prev;
     $('speedBtn').onclick = cycleSpeed;
     $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'')+'x';
+
+    // 真实音频事件（CGTN 条目）
+    const a = $('audioEl');
+    a.addEventListener('play', () => {
+      state.playing = true; state.paused = false;
+      updatePlayIcon(true); startTick();
+    });
+    a.addEventListener('pause', () => {
+      // 切换条目时 state.playing 已被重置，此处避免误判
+      if (state.playing) {
+        state.playing = false;
+        updatePlayIcon(false); stopTick();
+      }
+    });
+    a.addEventListener('timeupdate', updateProgress);
+    a.addEventListener('ended', () => {
+      stopTick(); state.playing = false; updatePlayIcon(false);
+      markEpisodeDone();
+      setTimeout(next, 600);
+    });
+    a.addEventListener('error', () => {
+      toast('音频加载失败，跳过');
+      setTimeout(()=>{ if (!state.playing) next(); }, 1200);
+    });
 
     $('openDrawer').onclick = () => { $('drawer').classList.add('open'); $('drawerMask').classList.add('open'); };
     $('drawerMask').onclick = closeDrawer;
@@ -1018,30 +1523,28 @@
           renderNowPlaying();
           renderTranscript();
         }
-        saveLS('settings', state.settings);
+        saveCurData({...curData(), settings: state.settings});
       };
     });
 
-    // 初始化选中态
-    document.querySelectorAll('.row[data-setting="level"]').forEach(r=>r.querySelector('.value').classList.toggle('active', r.dataset.value===state.settings.level));
-    document.querySelectorAll('.row[data-setting="subtitle"]').forEach(r=>r.querySelector('.value').classList.toggle('active', r.dataset.value===state.settings.subtitle));
-    document.querySelectorAll('.row[data-setting="topic"]').forEach(r=>{
-      const on = state.settings.topics.includes(r.dataset.value);
-      r.querySelector('.value').textContent = on?'已选':'';
-      r.querySelector('.value').classList.toggle('active', on);
-    });
+    syncSettingUI();
 
+    $('openAccount').onclick = () => { closeDrawer(); renderAccount(false); $('accountView').classList.add('open'); };
     $('openWeekly').onclick = () => { closeDrawer(); renderWeekly(); $('weeklyView').classList.add('open'); };
     $('openOffline').onclick = () => { closeDrawer(); renderOffline(); $('offlineView').classList.add('open'); };
     document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => $(b.dataset.close).classList.remove('open'));
 
     $('clearData').onclick = () => {
-      if (confirm('确定清除所有播放记录和设置吗？')) {
-        localStorage.clear();
+      if (!state.activeId) { toast('请先创建账号'); return; }
+      if (confirm('确定清除当前账号的所有播放记录和设置吗？')) {
         state.history = {};
         state.settings = { level:'medium', subtitle:'bilingual', speed:1.0, topics:['daily','news','drama'] };
+        state.newsItems = []; state.newsDate = '';
+        const d = curData();
+        d.history = {}; d.settings = {}; d.newsCache = null;
+        saveCurData(d);
         buildPlaylist();
-        toast('已清除'); closeDrawer(); renderToday(); renderNowPlaying(); renderTranscript();
+        toast('已清除'); closeDrawer(); renderToday(); renderNowPlaying(); renderTranscript(); syncSettingUI();
       }
     };
 
@@ -1049,6 +1552,16 @@
     if (synth && synth.getVoices().length === 0) {
       synth.onvoiceschanged = ()=>{};
     }
+  }
+
+  function syncSettingUI(){
+    document.querySelectorAll('.row[data-setting="level"]').forEach(r=>r.querySelector('.value').classList.toggle('active', r.dataset.value===state.settings.level));
+    document.querySelectorAll('.row[data-setting="subtitle"]').forEach(r=>r.querySelector('.value').classList.toggle('active', r.dataset.value===state.settings.subtitle));
+    document.querySelectorAll('.row[data-setting="topic"]').forEach(r=>{
+      const on = state.settings.topics.includes(r.dataset.value);
+      r.querySelector('.value').textContent = on?'已选':'';
+      r.querySelector('.value').classList.toggle('active', on);
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);
