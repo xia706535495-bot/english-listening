@@ -58,12 +58,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // RSS / API：网络优先，失败读缓存
-  if (url.hostname.includes('rss2json.com') || url.hostname.includes('voanews') || url.hostname.includes('bbc.co.uk') || url.hostname.includes('eslpod')) {
+  // RSS / 资料源：网络优先（拿最新内容），失败读缓存
+  if (/\.(xml|rss)(\?|$)/.test(url.href) || url.hostname.includes('ximalaya') || url.hostname.includes('simplecast') || url.hostname.includes('captivate') || url.hostname.includes('news.cgtn.com')) {
     event.respondWith(
       fetch(req).then(resp => {
-        const copy = resp.clone();
-        caches.open(CACHE_STATIC).then(c => c.put(req, copy));
+        if (resp.ok) {
+          const copy = resp.clone();
+          caches.open(CACHE_STATIC).then(c => c.put(req, copy));
+        }
         return resp;
       }).catch(() => caches.match(req))
     );

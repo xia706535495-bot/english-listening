@@ -208,6 +208,8 @@
   .tag.news { background: #EAE3D8; color: #7A5A2E; }
   .tag.daily { background: #E4EDE6; color: #2D5A3D; }
   .tag.drama { background: #E8E0E8; color: #6B3A6B; }
+  .tag.podcast { background: #E2E8EF; color: #3A5B8C; }
+  .tag.story { background: #F0E4E0; color: #8C4A3A; }
 
   /* 进度条（当前音频） */
   .progress-wrap {
@@ -355,6 +357,15 @@
     font-weight: 600;
   }
   .drawer h3:first-child { margin-top: 0; }
+  .topic-note {
+    font-size: 12px;
+    color: var(--ink-faint);
+    line-height: 1.6;
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--bg-soft);
+    border-radius: 8px;
+  }
   .drawer .row {
     display: flex;
     justify-content: space-between;
@@ -443,6 +454,8 @@
   .topic-bar .seg.daily { background: #2D5A3D; }
   .topic-bar .seg.news { background: #B8923A; }
   .topic-bar .seg.drama { background: #6B3A6B; }
+  .topic-bar .seg.podcast { background: #3A5B8C; }
+  .topic-bar .seg.story { background: #8C4A3A; }
   .legend {
     display: flex; gap: 16px; flex-wrap: wrap;
     font-size: 12px; color: var(--ink-soft);
@@ -562,6 +575,37 @@
     margin-bottom: 12px;
     text-align: center;
   }
+  .update-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 4px auto 0;
+    padding: 9px 18px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    color: var(--ink-soft);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .update-btn:active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .update-btn.loading { opacity: .65; }
+  .update-btn .ub-icon {
+    width: 14px; height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .update-btn.loading .ub-icon { animation: ub-spin 1s linear infinite; }
+  @keyframes ub-spin { to { transform: rotate(360deg); } }
+
   .btn.danger {
     background: transparent;
     color: #B3483C;
@@ -771,6 +815,11 @@
 
   <div class="up-next" id="upNext"></div>
 
+  <button class="update-btn" id="updateBtn">
+    <svg class="ub-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+    <span class="ub-label">更新听力资料</span>
+  </button>
+
   <div class="transcript" id="transcript">
     <div class="t-label">Transcript</div>
     <div class="t-en" id="tEn"></div>
@@ -798,6 +847,9 @@
   <div class="row" data-setting="topic" data-value="daily"><span class="label">日常交流</span><span class="value active">已选</span></div>
   <div class="row" data-setting="topic" data-value="news"><span class="label">时事新闻</span><span class="value active">已选</span></div>
   <div class="row" data-setting="topic" data-value="drama"><span class="label">美剧英剧精读</span><span class="value active">已选</span></div>
+  <div class="row" data-setting="topic" data-value="podcast"><span class="label">播客访谈</span><span class="value active">已选</span></div>
+  <div class="row" data-setting="topic" data-value="story"><span class="label">有声故事</span><span class="value active">已选</span></div>
+  <div class="topic-note">播客访谈、有声故事和时事新闻一样，联网时自动更新，无需改代码</div>
 
   <h3>数据</h3>
   <div class="row" id="openWeekly"><span class="label">每周总结</span><span class="value">›</span></div>
@@ -895,23 +947,36 @@
 
   /* ---------- 状态 ---------- */
   let state = {
-    settings: { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','drama'] },
+    settings: { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','drama','podcast','story'] },
     playlist: [], currentIndex: 0,
     history: {}, offline: false,
     playing: false, paused: false,
     wordIdx: 0, totalWords: 0, tickTimer: null,
     accounts: [], activeId: null,
-    newsItems: [], newsDate: '',
+    liveItems: [], liveDate: '',
     resume: null
   };
 
   /* ---------- 常量 ---------- */
   const ACCOUNT_COLORS = ['#2D5A3D','#3A5B8C','#8C4A3A','#6B3A6B'];
   const CONTENT_VERSION = '2026-10-30';
-  const CGTN_FEEDS = [
-    'https://news.cgtn.com/rss/documentary/CGTN-Documentary.rss',
-    'https://news.cgtn.com/rss/sportstalk/sportstalk.rss'
+  /* 实时资料源（全部国内可达、CORS 开放、每日/每周自动更新）：
+     news=新闻速览 · podcast=播客访谈 · story=有声故事 */
+  const LIVE_FEEDS = [
+    { id:'cgtn_doc', topic:'news', label:'CGTN 纪录片', url:'https://news.cgtn.com/rss/documentary/CGTN-Documentary.rss',
+      zh:'（CGTN 英文原声节目 · 暂无中文翻译）', take:3 },
+    { id:'cgtn_sport', topic:'news', label:'CGTN 体育', url:'https://news.cgtn.com/rss/sportstalk/sportstalk.rss',
+      zh:'（CGTN 英文原声节目 · 暂无中文翻译）', take:3 },
+    { id:'cd_voice', topic:'news', label:'中国日报每日英语', url:'https://www.ximalaya.com/album/3987311.xml',
+      zh:'（中国日报英文新闻速览）', take:3 },
+    { id:'china_focus', topic:'podcast', label:'China In Focus 访谈', url:'https://feeds.captivate.fm/china-in-focus/',
+      zh:'（中国日报英文深度访谈）', take:2 },
+    { id:'potside', topic:'podcast', label:'Potside Chats 圆桌', url:'https://www.ximalaya.com/album/86255608.xml',
+      zh:'（中国日报外籍记者圆桌谈）', take:2 },
+    { id:'grimm', topic:'story', label:'格林童话英文原版', url:'https://www.ximalaya.com/album/56080938.xml',
+      zh:'（英文原版有声故事）', take:3 }
   ];
+  const ALL_TOPICS = ['daily','news','drama','podcast','story'];
 
   /* ---------- 账号存储 ---------- */
   function loadAccounts(){ return loadLSRaw('hl_accounts', []); }
@@ -952,7 +1017,7 @@
         const acc = { id: uid(), name: '我的账号', color: ACCOUNT_COLORS[0], createdAt: Date.now() };
         state.accounts = [acc]; state.activeId = acc.id;
         saveAccounts(state.accounts); setActiveId(acc.id);
-        const d = { settings: legacySettings||{}, history: legacyHistory||{}, newsCache: null };
+        const d = { settings: legacySettings||{}, history: legacyHistory||{}, liveCache: null };
         saveData(acc.id, d);
       }
     }
@@ -972,8 +1037,16 @@
     const d = curData();
     state.settings = Object.assign(state.settings, d.settings||{});
     state.history = d.history||{};
-    state.newsItems = (d.newsCache && d.newsCache.items) ? d.newsCache.items : [];
-    state.newsDate = (d.newsCache && d.newsCache.date) ? d.newsCache.date : '';
+    // 实时资料：新版 liveCache；旧账号兼容 newsCache（旧新闻归为 news）
+    if (d.liveCache && d.liveCache.items) {
+      state.liveItems = d.liveCache.items;
+      state.liveDate = d.liveCache.date || '';
+    } else if (d.newsCache && d.newsCache.items) {
+      state.liveItems = d.newsCache.items.map(x => ({...x, topic: 'news'}));
+      state.liveDate = d.newsCache.date || '';
+    } else {
+      state.liveItems = []; state.liveDate = '';
+    }
 
     const now = new Date();
     const days = ['周日','周一','周二','周三','周四','周五','周六'];
@@ -988,11 +1061,11 @@
 
     setupEnv();
 
-    // 联网时拉取最新 CGTN 新闻（每 6 小时最多一次）
+    // 联网时拉取最新实时资料（每 6 小时最多一次）
     if (navigator.onLine !== false) {
       const lastFetch = loadLS('last_news_fetch', '');
       const h = Math.floor(Date.now()/3600000);
-      if (lastFetch !== String(h)) fetchCGTNNews();
+      if (lastFetch !== String(h)) fetchLiveAll();
     }
     checkVersion();
   }
@@ -1001,7 +1074,7 @@
     if ('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')) {
       navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
-    window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); if (state.activeId) fetchCGTNNews(); });
+    window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); if (state.activeId) fetchLiveAll(); });
     window.addEventListener('offline', ()=>{ state.offline=true; toast('已离线，可继续收听'); });
     if (!synth && !$('audioEl')) toast('当前浏览器不支持语音朗读');
   }
@@ -1011,55 +1084,58 @@
   function buildPlaylist(){
     const topics = state.settings.topics;
     const dailyDrama = MATERIALS.filter(m => topics.includes(m.topic));
-    // 新闻：优先今日拉取的 CGTN，其次缓存，最后内置
-    let news = [];
-    if (topics.includes('news')) {
-      if (state.newsItems.length && state.newsDate === todayStr()) news = state.newsItems;
-      else if (state.newsItems.length) news = state.newsItems; // 离线时用旧缓存
-      else news = MATERIALS.filter(m => m.topic === 'news');
+    // 实时资料（新闻/播客/故事）：优先今日拉取，其次旧缓存
+    let live = [];
+    if (state.liveItems && state.liveItems.length) {
+      live = state.liveItems.filter(m => topics.includes(m.topic));
     }
-    // 真实音频（CGTN）排前面：iOS 上 audio 元素播放最稳定，一打开就有声
-    state.playlist = news.concat(dailyDrama);
+    if (topics.includes('news') && !live.some(m => m.topic === 'news')) {
+      live = live.concat(MATERIALS.filter(m => m.topic === 'news'));
+    }
+    // 真实音频排前面：iOS 上 audio 元素播放最稳定，一打开就有声
+    state.playlist = live.concat(dailyDrama);
     if (!state.playlist.length) state.playlist = MATERIALS.slice();
     state.currentIndex = 0;
   }
 
-  /* ---------- CGTN 实时新闻拉取 ---------- */
-  async function fetchCGTNNews(){
+  /* ---------- 实时资料拉取（多源：新闻 / 播客 / 故事） ---------- */
+  async function fetchLiveAll(silent){
     saveLS('last_news_fetch', String(Math.floor(Date.now()/3600000)));
-    if (state.offline) return;
+    if (state.offline) return false;
     const items = [];
-    for (const feedUrl of CGTN_FEEDS) {
+    for (const feed of LIVE_FEEDS) {
       try {
-        const resp = await fetch(feedUrl, { cache: 'no-store' });
+        const resp = await fetch(feed.url, { cache: 'no-store' });
         if (!resp.ok) continue;
         const xml = await resp.text();
         const doc = new DOMParser().parseFromString(xml, 'text/xml');
         const entries = doc.querySelectorAll('item');
-        for (let i = 0; i < Math.min(3, entries.length); i++) {
+        for (let i = 0; i < Math.min(feed.take, entries.length); i++) {
           const it = entries[i];
           const title = (it.querySelector('title')?.textContent || '').trim();
           const enc = it.querySelector('enclosure');
           const audio = enc ? enc.getAttribute('url') : '';
           if (!audio) continue;
-          const desc = (it.querySelector('description')?.textContent || '').replace(/<[^>]+>/g,'').replace(/\[.*?\]/g,'').trim();
+          const desc = (it.querySelector('description')?.textContent || '')
+            .replace(/<!\[CDATA\[/g,'').replace(/\]\]>/g,'')
+            .replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
           items.push({
-            id: 'cgtn_' + i + '_' + Date.now(),
-            topic: 'news',
-            title: title.replace(/^CGTN\s*/,'').substring(0,80),
+            id: feed.id + '_' + i + '_' + Date.now(),
+            topic: feed.topic,
+            title: title.replace(/^CGTN\s*/,'').replace(/^英语新闻[丨|]\s*/,'').substring(0,80) || feed.label,
             audio: audio,
-            en: desc.substring(0, 700) || title,
-            zh: '（CGTN 英文原声节目 · 暂无中文翻译）',
-            isAudio: true, source: 'CGTN'
+            en: (desc || title).substring(0, 700),
+            zh: feed.zh,
+            isAudio: true, source: feed.label
           });
         }
-      } catch(e) { console.warn('CGTN fetch failed', e); }
+      } catch(e) { console.warn('feed fetch failed:', feed.id, e); }
     }
     if (items.length) {
-      state.newsItems = items;
-      state.newsDate = todayStr();
+      state.liveItems = items;
+      state.liveDate = todayStr();
       const d = curData();
-      d.newsCache = { date: state.newsDate, items: items };
+      d.liveCache = { date: state.liveDate, items: items };
       saveCurData(d);
       // 预缓存音频（Service Worker）
       items.forEach(ep => {
@@ -1069,25 +1145,51 @@
           }).catch(()=>{});
         }
       });
-      if (state.settings.topics.includes('news')) {
-        buildPlaylist();
-        renderNowPlaying();
-        toast('新闻已更新至最新');
-      }
+      buildPlaylist();
+      renderNowPlaying();
+      if (!silent) toast('听力资料已更新至最新');
+      return true;
     }
+    return false;
   }
 
   /* ---------- 版本检查（每周内容更新提示） ---------- */
   function checkVersion(){
+    return fetch('https://raw.githubusercontent.com/xia706535495-bot/english-listening/main/version.json', {cache:'no-store'})
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (j && j.version && j.version !== CONTENT_VERSION) {
+          toast('本周内容已更新，刷新页面获取');
+          return true;
+        }
+        return false;
+      })
+      .catch(()=> false);
+  }
+
+  /* ---------- 手动更新听力资料 ---------- */
+  async function updateMaterials(){
+    const btn = $('updateBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('loading');
+      btn.querySelector('.ub-label').textContent = '更新中…';
+    }
     try {
-      fetch('https://raw.githubusercontent.com/xia706535495-bot/english-listening/main/version.json', {cache:'no-store'})
-        .then(r => r.ok ? r.json() : null)
-        .then(j => {
-          if (j && j.version && j.version !== CONTENT_VERSION) {
-            toast('本周内容已更新，刷新页面获取');
-          }
-        }).catch(()=>{});
-    } catch(e){}
+      const ok = await fetchLiveAll(true);
+      await checkVersion();
+      if (ok) toast('听力资料已更新到最新');
+      else toast('暂无新内容，请检查网络后重试');
+    } catch(e) {
+      toast('更新失败，请检查网络');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        btn.querySelector('.ub-label').textContent = '更新听力资料';
+      }
+      renderResume();
+    }
   }
 
   /* ---------- 播放控制（音频 / TTS 双模式） ---------- */
@@ -1366,7 +1468,7 @@
     $('controlsRow').style.visibility='visible';
     $('npTitle').textContent = ep.title;
     const tag = $('npTag');
-    tag.textContent = ep.topic==='daily' ? '日常' : ep.topic==='news' ? '新闻' : '影视';
+    tag.textContent = ({daily:'日常',news:'新闻',drama:'影视',podcast:'播客',story:'故事'})[ep.topic] || '听力';
     tag.className = 'tag ' + ep.topic;
     $('npDuration').textContent = ep.isAudio ? (ep.source ? ep.source : '音频') : '朗读';
     $('progressWrap').style.display = 'block';
@@ -1410,7 +1512,7 @@
 
     let totalSec=0;
     let dailySecs=[0,0,0,0,0,0,0];
-    let topicSecs={daily:0,news:0,drama:0};
+    let topicSecs={daily:0,news:0,drama:0,podcast:0,story:0};
     let episodeList=[];
     let metDays=0;
 
@@ -1433,7 +1535,7 @@
         if (m && topicSecs[m.topic] !== undefined) topicSecs[m.topic] += (it.sec||180);
       }
     });
-    const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama || 1;
+    const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama+topicSecs.podcast+topicSecs.story || 1;
     const totalMin = fmtMin(totalSec);
     const goalPct = Math.round(totalSec/(DAILY_GOAL_SEC*7)*100);
     const days = ['一','二','三','四','五','六','日'];
@@ -1449,11 +1551,15 @@
         '<div class="seg daily" style="width:'+(topicSecs.daily/topicTotal*100)+'%"></div>'+
         '<div class="seg news" style="width:'+(topicSecs.news/topicTotal*100)+'%"></div>'+
         '<div class="seg drama" style="width:'+(topicSecs.drama/topicTotal*100)+'%"></div>'+
+        '<div class="seg podcast" style="width:'+(topicSecs.podcast/topicTotal*100)+'%"></div>'+
+        '<div class="seg story" style="width:'+(topicSecs.story/topicTotal*100)+'%"></div>'+
       '</div>'+
       '<div class="legend">'+
         '<span><span class="dot" style="background:#2D5A3D"></span>日常 '+fmtMin(topicSecs.daily)+'分</span>'+
         '<span><span class="dot" style="background:#B8923A"></span>新闻 '+fmtMin(topicSecs.news)+'分</span>'+
         '<span><span class="dot" style="background:#6B3A6B"></span>影视 '+fmtMin(topicSecs.drama)+'分</span>'+
+        '<span><span class="dot" style="background:#3A5B8C"></span>播客 '+fmtMin(topicSecs.podcast)+'分</span>'+
+        '<span><span class="dot" style="background:#8C4A3A"></span>故事 '+fmtMin(topicSecs.story)+'分</span>'+
       '</div>'+
       '<div class="section-title">每日时长</div>'+
       '<div class="days-grid">';
@@ -1480,12 +1586,17 @@
   /* ---------- 离线管理 ---------- */
   function renderOffline(){
     const total = MATERIALS.length;
-    const newsN = state.newsItems.length;
+    const live = state.liveItems || [];
+    const nNews = live.filter(m => m.topic === 'news').length;
+    const nPod = live.filter(m => m.topic === 'podcast').length;
+    const nStory = live.filter(m => m.topic === 'story').length;
     $('offlineContent').innerHTML =
       '<div class="offline-card">'+
         '<div class="row"><span class="k">内置材料</span><span class="v">'+total+' 段</span></div>'+
-        '<div class="row"><span class="k">实时新闻（CGTN）</span><span class="v">'+newsN+' 条</span></div>'+
-        '<div class="row"><span class="k">新闻更新于</span><span class="v">'+(state.newsDate? state.newsDate.slice(5) : '--')+'</span></div>'+
+        '<div class="row"><span class="k">实时新闻</span><span class="v">'+nNews+' 条</span></div>'+
+        '<div class="row"><span class="k">播客访谈</span><span class="v">'+nPod+' 集</span></div>'+
+        '<div class="row"><span class="k">有声故事</span><span class="v">'+nStory+' 篇</span></div>'+
+        '<div class="row"><span class="k">更新于</span><span class="v">'+(state.liveDate? state.liveDate.slice(5) : '--')+'</span></div>'+
         '<div class="row"><span class="k">网络状态</span><span class="v">'+(state.offline?'离线':'在线')+'</span></div>'+
       '</div>'+
       '<div class="cache-section-title">已缓存内容（离线可听）</div>'+
@@ -1519,7 +1630,7 @@
       items.sort((a,b)=>b.size-a.size);
       const listHtml = items.map(it =>
         '<div class="cache-item"><div class="ci-name" title="'+esc(it.name)+'">'+esc(it.name)+'</div>'+
-        '<div class="ci-size">'+(it.size/1048576).toFixed(1)+' MB</div></div>'
+        '<div class="ci-size">'+(it.size>0 ? (it.size/1048576).toFixed(1)+' MB' : '已缓存')+'</div></div>'
       ).join('');
       box.outerHTML =
         '<div class="offline-card">'+
@@ -1632,7 +1743,7 @@
     saveAccounts(state.accounts);
     setActiveId(acc.id);
     state.activeId = acc.id;
-    const d = { settings: {}, history: {}, newsCache: null };
+    const d = { settings: {}, history: {}, liveCache: null };
     saveData(acc.id, d);
     $('accountView').classList.remove('open');
     toast('账号已创建，欢迎 ' + name);
@@ -1644,7 +1755,8 @@
     if (id === state.activeId) return;
     // 保存当前账号状态
     const d = curData();
-    d.settings = state.settings; d.history = state.history; d.newsCache = { date: state.newsDate, items: state.newsItems };
+    d.settings = state.settings; d.history = state.history;
+    d.liveCache = { date: state.liveDate, items: state.liveItems };
     saveCurData(d);
     // 停止播放
     stopTick(); state.playing = false; state.paused = false;
@@ -1660,13 +1772,21 @@
 
   function applyActiveAccount(){
     const d = curData();
-    state.settings = Object.assign({level:'medium',subtitle:'bilingual',speed:1.0,topics:['daily','news','drama']}, d.settings||{});
+    state.settings = Object.assign({level:'medium',subtitle:'bilingual',speed:1.0,topics:['daily','news','drama','podcast','story']}, d.settings||{});
     state.history = d.history||{};
-    state.newsItems = (d.newsCache && d.newsCache.items) ? d.newsCache.items : [];
-    state.newsDate = (d.newsCache && d.newsCache.date) ? d.newsCache.date : '';
+    // 实时资料：新版 liveCache；旧账号兼容 newsCache（旧新闻归为 news）
+    if (d.liveCache && d.liveCache.items) {
+      state.liveItems = d.liveCache.items;
+      state.liveDate = d.liveCache.date || '';
+    } else if (d.newsCache && d.newsCache.items) {
+      state.liveItems = d.newsCache.items.map(x => ({...x, topic: 'news'}));
+      state.liveDate = d.newsCache.date || '';
+    } else {
+      state.liveItems = []; state.liveDate = '';
+    }
     state.resume = d.resume || null;
     state.settings.speed = state.settings.speed || 1.0;
-    state.settings.topics = state.settings.topics || ['daily','news','drama'];
+    state.settings.topics = state.settings.topics || ['daily','news','drama','podcast','story'];
     buildPlaylist();
     $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'')+'x';
     syncSettingUI();
@@ -1674,7 +1794,7 @@
     if (navigator.onLine !== false) {
       const lastFetch = loadLS('last_news_fetch','');
       const h = Math.floor(Date.now()/3600000);
-      if (lastFetch !== String(h)) fetchCGTNNews();
+      if (lastFetch !== String(h)) fetchLiveAll();
     }
   }
 
@@ -1833,16 +1953,17 @@
     $('openAccount').onclick = () => { closeDrawer(); renderAccount(false); $('accountView').classList.add('open'); };
     $('openWeekly').onclick = () => { closeDrawer(); renderWeekly(); $('weeklyView').classList.add('open'); };
     $('openOffline').onclick = () => { closeDrawer(); renderOffline(); $('offlineView').classList.add('open'); };
+    $('updateBtn').onclick = () => { updateMaterials(); };
     document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => $(b.dataset.close).classList.remove('open'));
 
     $('clearData').onclick = () => {
       if (!state.activeId) { toast('请先创建账号'); return; }
       if (confirm('确定清除当前账号的所有播放记录和设置吗？')) {
         state.history = {};
-        state.settings = { level:'medium', subtitle:'bilingual', speed:1.0, topics:['daily','news','drama'] };
-        state.newsItems = []; state.newsDate = '';
+        state.settings = { level:'medium', subtitle:'bilingual', speed:1.0, topics:['daily','news','drama','podcast','story'] };
+        state.liveItems = []; state.liveDate = '';
         const d = curData();
-        d.history = {}; d.settings = {}; d.newsCache = null;
+        d.history = {}; d.settings = {}; d.liveCache = null;
         saveCurData(d);
         buildPlaylist();
         toast('已清除'); closeDrawer(); renderToday(); renderNowPlaying(); renderTranscript(); syncSettingUI();
