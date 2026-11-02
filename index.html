@@ -137,35 +137,55 @@
   .resume-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     width: 100%;
     max-width: 420px;
-    background: var(--accent-soft);
-    border: 1px solid var(--accent-line);
-    border-radius: 12px;
-    padding: 11px 14px;
+    background: #F2F7F3;
+    border: 1px solid #C9DFCE;
+    border-radius: 14px;
+    padding: 12px 14px;
     margin-bottom: 14px;
-    font-size: 13px;
-    color: var(--accent);
+    cursor: pointer;
   }
   .resume-bar .rb-dot {
-    width: 8px; height: 8px;
+    width: 10px; height: 10px;
     border-radius: 50%;
     background: var(--accent);
     flex-shrink: 0;
+    box-shadow: 0 0 0 4px rgba(45,90,61,0.12);
   }
-  .resume-bar .rb-text {
+  .resume-bar .rb-main {
     flex: 1;
     min-width: 0;
+  }
+  .resume-bar .rb-title {
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .resume-bar .rb-text b { font-weight: 600; }
-  .resume-bar .rb-time {
+  .resume-bar .rb-title b { font-weight: 600; }
+  .resume-bar .rb-sub {
     font-size: 12px;
-    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .resume-bar .rb-sep { opacity: 0.6; }
+  .resume-bar .rb-hint {
+    margin-left: auto;
+    color: var(--accent);
+    font-size: 12px;
+  }
+  .resume-bar .rb-arrow {
     flex-shrink: 0;
+    font-size: 13px;
+    color: var(--accent);
     opacity: 0.8;
   }
   .goal-done { color: var(--accent); }
@@ -779,8 +799,14 @@
 
   <div class="resume-bar" id="resumeBar" style="display:none">
     <span class="rb-dot"></span>
-    <span class="rb-text">继续上次：<b id="resumeTitle">--</b></span>
-    <span class="rb-time" id="resumeTime">--</span>
+    <div class="rb-main">
+      <div class="rb-title">继续上次：<b id="resumeTitle">--</b></div>
+      <div class="rb-sub">
+        <span id="resumeTime">--</span><span class="rb-sep">·</span><span id="resumePos">--</span>
+        <span class="rb-hint">点圆圈接着听</span>
+      </div>
+    </div>
+    <span class="rb-arrow">▶</span>
   </div>
 
   <div class="now-playing" id="nowPlayingCard" style="display:none">
@@ -1000,6 +1026,13 @@
   function saveLS(k,v){ saveLSRaw('hl_'+k, v); }
   function estDuration(ep){ return Math.round(ep.en.split(/\s+/).length / (WORDS_PER_MIN * state.settings.speed) * 60); }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // 稳定编号：同一条内容（同一来源+标题）编号不变，刷新后断点续听才能找回
+  function stableHash(s){
+    let h = 0;
+    const str = String(s||'');
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
 
   /* ---------- 初始化 ---------- */
   function init(){
@@ -1120,7 +1153,7 @@
             .replace(/<!\[CDATA\[/g,'').replace(/\]\]>/g,'')
             .replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
           items.push({
-            id: feed.id + '_' + i + '_' + Date.now(),
+            id: feed.id + '_' + stableHash(title),
             topic: feed.topic,
             title: title.replace(/^CGTN\s*/,'').replace(/^英语新闻[丨|]\s*/,'').substring(0,80) || feed.label,
             audio: audio,
@@ -1146,6 +1179,8 @@
         }
       });
       buildPlaylist();
+      // 拉新后仍定位到上次听的条目（找不到则保持，由续听卡片提示）
+      locateResume();
       renderNowPlaying();
       if (!silent) toast('听力资料已更新至最新');
       return true;
@@ -1227,9 +1262,17 @@
     let idx = -1;
     if (resume && resume.epId) {
       idx = state.playlist.findIndex(x => x.id === resume.epId);
+      // 编号匹配不到（内容已换新）时，用标题兜底找同一条
+      if (idx < 0 && resume.title) {
+        idx = state.playlist.findIndex(x => x.title === resume.title);
+      }
     }
     if (idx >= 0) {
       playEpisode(idx, { resumeTime: resume.time || 0 });
+    } else if (resume && resume.epId) {
+      // 上次的内容确实没了（每日更新被顶掉），从最新开头，并明确告知
+      playEpisode(0);
+      toast('上次的内容已更新，已为你跳到最新开头');
     } else {
       playEpisode(state.currentIndex);
     }
@@ -1259,13 +1302,32 @@
     const bar = $('resumeBar');
     if (!bar) return;
     const r = state.resume;
-    const playingNow = state.playing && state.resume && state.resume.epId === (state.playlist[state.currentIndex]||{}).id;
+    const cur = state.playlist[state.currentIndex] || {};
+    const playingNow = state.playing && r && (r.epId === cur.id || r.title === cur.title);
     if (r && r.title && !playingNow) {
       $('resumeTitle').textContent = r.title;
       $('resumeTime').textContent = r.time ? fmtTime(r.time) : '开头';
+      // 上次条目在列表中的位置（找不到时留空）
+      let idx = state.playlist.findIndex(x => x.id === r.epId);
+      if (idx < 0) idx = state.playlist.findIndex(x => x.title === r.title);
+      $('resumePos').textContent = idx >= 0 ? ('第' + (idx+1) + '/' + state.playlist.length + '段') : '';
       bar.style.display = 'flex';
     } else {
       bar.style.display = 'none';
+    }
+  }
+
+  // 刷新/切账号后：把界面定位到上次听的条目，不再回到第一条
+  function locateResume(){
+    const r = state.resume;
+    if (!r || !r.epId || !state.playlist.length) return;
+    let idx = state.playlist.findIndex(x => x.id === r.epId);
+    if (idx < 0 && r.title) idx = state.playlist.findIndex(x => x.title === r.title);
+    if (idx >= 0 && idx !== state.currentIndex) {
+      state.currentIndex = idx;
+      renderNowPlaying();
+      renderTranscript();
+      renderResume();
     }
   }
 
@@ -1470,7 +1532,12 @@
     const tag = $('npTag');
     tag.textContent = ({daily:'日常',news:'新闻',drama:'影视',podcast:'播客',story:'故事'})[ep.topic] || '听力';
     tag.className = 'tag ' + ep.topic;
-    $('npDuration').textContent = ep.isAudio ? (ep.source ? ep.source : '音频') : '朗读';
+    // 未播放且这条正是上次听到的 → 显示续听位置；否则显示第几段/来源
+    const r = state.resume;
+    const isResumeTarget = !state.playing && r && (r.epId === ep.id || r.title === ep.title);
+    $('npDuration').textContent = isResumeTarget
+      ? '上次听到 ' + fmtTime(r.time || 0)
+      : (state.currentIndex+1) + '/' + state.playlist.length + ' · ' + (ep.isAudio ? (ep.source ? ep.source : '音频') : '朗读');
     $('progressWrap').style.display = 'block';
     const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
     if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title;
@@ -1788,6 +1855,8 @@
     state.settings.speed = state.settings.speed || 1.0;
     state.settings.topics = state.settings.topics || ['daily','news','drama','podcast','story'];
     buildPlaylist();
+    // 刷新/切账号后定位到上次听的条目
+    locateResume();
     $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'')+'x';
     syncSettingUI();
     renderNowPlaying(); renderToday(); renderTranscript(); renderAccountName(); renderResume();
@@ -1954,6 +2023,7 @@
     $('openWeekly').onclick = () => { closeDrawer(); renderWeekly(); $('weeklyView').classList.add('open'); };
     $('openOffline').onclick = () => { closeDrawer(); renderOffline(); $('offlineView').classList.add('open'); };
     $('updateBtn').onclick = () => { updateMaterials(); };
+    $('resumeBar').onclick = () => { startFromResume(); };
     document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => $(b.dataset.close).classList.remove('open'));
 
     $('clearData').onclick = () => {
