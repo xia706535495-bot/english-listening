@@ -1070,6 +1070,7 @@
     const d = curData();
     state.settings = Object.assign(state.settings, d.settings||{});
     state.history = d.history||{};
+    state.resume = d.resume || null;
     // 实时资料：新版 liveCache；旧账号兼容 newsCache（旧新闻归为 news）
     if (d.liveCache && d.liveCache.items) {
       state.liveItems = d.liveCache.items;
@@ -1086,11 +1087,14 @@
     $('topDate').textContent = (now.getMonth()+1)+'月'+now.getDate()+'日 '+days[now.getDay()];
 
     buildPlaylist();
+    // 刷新后定位到上次听的条目
+    locateResume();
     bindEvents();
     renderNowPlaying();
     renderToday();
     renderTranscript();
     renderAccountName();
+    renderResume();
 
     setupEnv();
 
@@ -1107,6 +1111,9 @@
     if ('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')) {
       navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
+    // 页面退出/切后台瞬间保存断点（刷新、关标签前兜底）
+    document.addEventListener('visibilitychange', () => { if (document.hidden) saveResume(); });
+    window.addEventListener('pagehide', () => { saveResume(); });
     window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); if (state.activeId) fetchLiveAll(); });
     window.addEventListener('offline', ()=>{ state.offline=true; toast('已离线，可继续收听'); });
     if (!synth && !$('audioEl')) toast('当前浏览器不支持语音朗读');
@@ -1282,7 +1289,8 @@
     if (!state.activeId) return;
     const ep = state.playlist[state.currentIndex];
     const a = $('audioEl');
-    if (ep && ep.isAudio && a.duration && a.currentTime > 3) {
+    // iOS 上部分流媒体 duration 可能不可用（NaN/Infinity），位置 currentTime 始终可用，据此保存
+    if (ep && ep.isAudio && isFinite(a.currentTime) && a.currentTime > 3) {
       const d = curData();
       d.resume = { epId: ep.id, time: a.currentTime, title: ep.title, updatedAt: Date.now() };
       saveCurData(d);
