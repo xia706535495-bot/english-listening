@@ -429,6 +429,27 @@
   .view-header h2 { font-size: 18px; margin: 0; font-weight: 600; }
 
   /* 每周总结 */
+  .period-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 12px 16px 0;
+  }
+  .period-tabs button {
+    flex: 1;
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: var(--ink-soft);
+    border-radius: 20px;
+    transition: all 0.2s;
+  }
+  .period-tabs button.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
   .weekly-hero {
     text-align: center;
     padding: 30px 0 20px;
@@ -892,11 +913,16 @@
   <div id="accountContent"></div>
 </div>
 
-<!-- 每周总结视图 -->
+<!-- 每周总结视图（周/月/年） -->
 <div class="view" id="weeklyView">
   <div class="view-header">
     <button class="back" data-close="weeklyView"><svg viewBox="0 0 24 24"><polyline points="15,18 9,12 15,6"/></svg></button>
-    <h2>每周总结</h2>
+    <h2>听力总结</h2>
+  </div>
+  <div class="period-tabs" id="periodTabs">
+    <button data-period="week" class="on">本周</button>
+    <button data-period="month">本月</button>
+    <button data-period="year">今年</button>
   </div>
   <div id="weeklyContent"></div>
 </div>
@@ -1121,6 +1147,13 @@
 
   function uid(){ return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
+  // 所有听过的条目 id（跨天累计，从每日记录汇总）
+  function heardIds(){
+    const set = new Set();
+    Object.keys(state.history||{}).forEach(k => (state.history[k].items||[]).forEach(it => set.add(it.id)));
+    return set;
+  }
+
   function buildPlaylist(){
     const topics = state.settings.topics;
     const dailyDrama = MATERIALS.filter(m => topics.includes(m.topic));
@@ -1135,6 +1168,11 @@
     // 真实音频排前面：iOS 上 audio 元素播放最稳定，一打开就有声
     state.playlist = live.concat(dailyDrama);
     if (!state.playlist.length) state.playlist = MATERIALS.slice();
+    // 未听过的内容排前面（已听过的沉到后面，下次优先推荐新内容）
+    const heard = heardIds();
+    if (heard.size) {
+      state.playlist.sort((a, b) => (heard.has(a.id) ? 1 : 0) - (heard.has(b.id) ? 1 : 0));
+    }
     state.currentIndex = 0;
   }
 
@@ -1511,7 +1549,16 @@
       const today = todayStr();
       if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
       state.history[today].seconds += 1;
-      if (state.history[today].seconds % 30 === 0) saveCurData({...curData(), history: state.history});
+      if (state.history[today].seconds % 30 === 0) {
+        // 听满 30 秒即标记"已听过"（无需听完一整段）
+        const ep = state.playlist[state.currentIndex];
+        const a = $('audioEl');
+        if (ep && ep.isAudio && a.currentTime > 30 && !state.history[today].items.find(i => i.id === ep.id)) {
+          state.history[today].items.push({ id:ep.id, topic:ep.topic, title:ep.title, sec:Math.round(a.currentTime/60)||1, done:false });
+          renderNowPlaying();
+        }
+        saveCurData({...curData(), history: state.history});
+      }
       // 每 5 秒存一次断点位置
       if (state.history[today].seconds % 5 === 0) saveResume();
       renderToday();
@@ -1543,9 +1590,10 @@
     // 未播放且这条正是上次听到的 → 显示续听位置；否则显示第几段/来源
     const r = state.resume;
     const isResumeTarget = !state.playing && r && (r.epId === ep.id || r.title === ep.title);
-    $('npDuration').textContent = isResumeTarget
+    const heardMark = heardIds().has(ep.id) ? '✓ 已听过 · ' : '';
+    $('npDuration').textContent = (heardMark || '') + (isResumeTarget
       ? '上次听到 ' + fmtTime(r.time || 0)
-      : (state.currentIndex+1) + '/' + state.playlist.length + ' · ' + (ep.isAudio ? (ep.source ? ep.source : '音频') : '朗读');
+      : (state.currentIndex+1) + '/' + state.playlist.length + ' · ' + (ep.isAudio ? (ep.source ? ep.source : '音频') : '朗读'));
     $('progressWrap').style.display = 'block';
     const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
     if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title;
@@ -1578,31 +1626,38 @@
     }
   }
 
-  /* ---------- 每周总结 ---------- */
-  function renderWeekly(){
+  /* ---------- 听力总结（周 / 月 / 年） ---------- */
+  let summaryPeriod = 'week';
+
+  function renderWeekly(){ renderSummary(summaryPeriod); }
+
+  function renderSummary(period){
     const now = new Date();
-    const day = now.getDay()||7;
-    const monday = new Date(now);
-    monday.setDate(now.getDate()-day+1); monday.setHours(0,0,0,0);
+    let start;
+    if (period === 'week') { const day = now.getDay()||7; start = new Date(now); start.setDate(now.getDate()-day+1); }
+    else if (period === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); }
+    else { start = new Date(now.getFullYear(), 0, 1); }
+    start.setHours(0,0,0,0);
+    const daysIn = Math.floor((now - start)/86400000) + 1;
 
     let totalSec=0;
-    let dailySecs=[0,0,0,0,0,0,0];
+    let dailySecs=[];
     let topicSecs={daily:0,news:0,drama:0,podcast:0,story:0};
     let episodeList=[];
     let metDays=0;
 
-    for (let i=0;i<7;i++){
-      const d = new Date(monday); d.setDate(monday.getDate()+i);
+    for (let i=0;i<daysIn;i++){
+      const d = new Date(start); d.setDate(start.getDate()+i);
       const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       const rec = state.history[key];
+      dailySecs[i] = rec ? (rec.seconds||0) : 0;
       if (rec) {
-        dailySecs[i] = rec.seconds||0;
         totalSec += rec.seconds||0;
         if ((rec.seconds||0) >= DAILY_GOAL_SEC) metDays++;
         (rec.items||[]).forEach(it => episodeList.push({...it, date:key}));
       }
     }
-    // 主题按本周听过的条目累计
+    // 主题按该周期听过的条目累计
     episodeList.forEach(it => {
       if (it.topic && topicSecs[it.topic] !== undefined) topicSecs[it.topic] += (it.sec||180);
       else {
@@ -1612,14 +1667,37 @@
     });
     const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama+topicSecs.podcast+topicSecs.story || 1;
     const totalMin = fmtMin(totalSec);
-    const goalPct = Math.round(totalSec/(DAILY_GOAL_SEC*7)*100);
-    const days = ['一','二','三','四','五','六','日'];
-    const maxBar = Math.max(...dailySecs, DAILY_GOAL_SEC);
+    const goalTotal = DAILY_GOAL_SEC * daysIn;
+    const goalPct = Math.round(totalSec/goalTotal*100);
+    const periodLabel = {week:'本周',month:'本月',year:'今年'}[period] || '';
+
+    // 柱状图：周/月按天，年按 12 个月聚合
+    let barHtml;
+    if (period === 'year') {
+      const monthSecs=[0,0,0,0,0,0,0,0,0,0,0,0];
+      dailySecs.forEach((s,i)=>{ const d=new Date(start); d.setDate(start.getDate()+i); monthSecs[d.getMonth()]+=s; });
+      const maxBar = Math.max(...monthSecs, DAILY_GOAL_SEC);
+      barHtml = '<div class="days-grid">' + monthSecs.map((s,i)=>{
+        const h=(s/maxBar*100).toFixed(1);
+        const met = s >= DAILY_GOAL_SEC*30;
+        return '<div class="day-col"><div class="bar '+(met?'met':'')+'" style="height:'+h+'%"></div><div class="day-label">'+(i+1)+'月</div></div>';
+      }).join('') + '</div>';
+    } else {
+      const dayLabels = period==='week' ? ['一','二','三','四','五','六','日'] : dailySecs.map((_,i)=>String(i+1));
+      const maxBar = Math.max(...dailySecs, DAILY_GOAL_SEC);
+      barHtml = '<div class="days-grid">' + dailySecs.map((s,i)=>{
+        const h=(s/maxBar*100).toFixed(1);
+        const met = s >= DAILY_GOAL_SEC;
+        return '<div class="day-col"><div class="bar '+(met?'met':'')+'" style="height:'+h+'%"></div><div class="day-label">'+dayLabels[i]+'</div></div>';
+      }).join('') + '</div>';
+    }
+
+    document.querySelectorAll('#periodTabs button').forEach(b => b.classList.toggle('on', b.dataset.period === period));
 
     let html = '<div class="weekly-hero">'+
       '<div class="big">'+totalMin+'<span class="unit"> 分钟</span></div>'+
-      '<div class="sub">本周总听力时长 · 目标完成率 '+goalPct+'%</div>'+
-      (metDays>0 ? '<div class="streak">'+metDays+' 天达成 30 分钟目标</div>' : '<div class="streak" style="background:var(--bg-soft);color:var(--ink-faint)">本周还未达成目标</div>')+
+      '<div class="sub">'+periodLabel+'总听力时长 · 目标完成率 '+goalPct+'%</div>'+
+      (metDays>0 ? '<div class="streak">'+metDays+' 天达成 30 分钟目标</div>' : '<div class="streak" style="background:var(--bg-soft);color:var(--ink-faint)">'+periodLabel+'还未达成目标</div>')+
       '</div>'+
       '<div class="section-title">主题分布</div>'+
       '<div class="topic-bar">'+
@@ -1636,15 +1714,8 @@
         '<span><span class="dot" style="background:#3A5B8C"></span>播客 '+fmtMin(topicSecs.podcast)+'分</span>'+
         '<span><span class="dot" style="background:#8C4A3A"></span>故事 '+fmtMin(topicSecs.story)+'分</span>'+
       '</div>'+
-      '<div class="section-title">每日时长</div>'+
-      '<div class="days-grid">';
-
-    for (let i=0;i<7;i++){
-      const h = (dailySecs[i]/maxBar*100).toFixed(1);
-      const met = dailySecs[i] >= DAILY_GOAL_SEC;
-      html += '<div class="day-col"><div class="bar '+(met?'met':'')+'" style="height:'+h+'%"></div><div class="day-label">'+days[i]+'</div></div>';
-    }
-    html += '</div>';
+      '<div class="section-title">'+(period==='year'?'每月时长':'每日时长')+'</div>'+
+      barHtml;
 
     if (episodeList.length) {
       html += '<div class="section-title">听过的内容</div>';
@@ -1653,7 +1724,7 @@
           '<div class="ep-meta"><span>'+it.date+'</span><span>'+fmtMin(it.sec||0)+' 分钟</span></div></div>';
       });
     } else {
-      html += '<div class="section-title">听过的内容</div><div class="loading">本周还没有播放记录</div>';
+      html += '<div class="section-title">听过的内容</div><div class="loading">'+periodLabel+'还没有播放记录</div>';
     }
     $('weeklyContent').innerHTML = html;
   }
@@ -2029,6 +2100,7 @@
 
     $('openAccount').onclick = () => { closeDrawer(); renderAccount(false); $('accountView').classList.add('open'); };
     $('openWeekly').onclick = () => { closeDrawer(); renderWeekly(); $('weeklyView').classList.add('open'); };
+    $('periodTabs').querySelectorAll('button').forEach(b => b.onclick = () => { summaryPeriod = b.dataset.period; renderWeekly(); });
     $('openOffline').onclick = () => { closeDrawer(); renderOffline(); $('offlineView').classList.add('open'); };
     $('updateBtn').onclick = () => { updateMaterials(); };
     $('resumeBar').onclick = () => { startFromResume(); };
