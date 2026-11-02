@@ -474,6 +474,57 @@
     font-weight: 600;
   }
 
+  /* 学习成绩单卡片 */
+  .report-card {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 18px 16px;
+    margin: 20px 0 4px;
+  }
+  .report-grade {
+    flex-shrink: 0;
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent);
+  }
+  .report-card.grade-S .report-grade { background: #B8923A; box-shadow: 0 0 0 4px rgba(184,146,58,0.15); }
+  .report-card.grade-A .report-grade { background: #2D5A3D; }
+  .report-card.grade-B .report-grade { background: #3A5B8C; }
+  .report-card.grade-C .report-grade { background: #B06B3A; }
+  .report-card.grade-D .report-grade { background: #8A8A85; }
+  .report-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+  .report-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .report-row {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.7;
+  }
+  .report-row b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .report-comment {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 5px 10px;
+    border-radius: 8px;
+    align-self: flex-start;
+  }
+
   .section-title {
     font-size: 13px;
     color: var(--ink-faint);
@@ -899,7 +950,7 @@
   <div class="topic-note">播客访谈、有声故事和时事新闻一样，联网时自动更新，无需改代码</div>
 
   <h3>数据</h3>
-  <div class="row" id="openWeekly"><span class="label">每周总结</span><span class="value">›</span></div>
+  <div class="row" id="openWeekly"><span class="label">学习成绩单</span><span class="value">›</span></div>
   <div class="row" id="openOffline"><span class="label">离线下载管理</span><span class="value">›</span></div>
   <div class="row" id="clearData"><span class="label" style="color:var(--warn)">清除全部数据</span><span class="value">›</span></div>
 </aside>
@@ -913,11 +964,11 @@
   <div id="accountContent"></div>
 </div>
 
-<!-- 每周总结视图（周/月/年） -->
+<!-- 学习成绩单视图（周/月/年） -->
 <div class="view" id="weeklyView">
   <div class="view-header">
     <button class="back" data-close="weeklyView"><svg viewBox="0 0 24 24"><polyline points="15,18 9,12 15,6"/></svg></button>
-    <h2>听力总结</h2>
+    <h2>学习成绩单</h2>
   </div>
   <div class="period-tabs" id="periodTabs">
     <button data-period="week" class="on">本周</button>
@@ -1124,13 +1175,61 @@
 
     setupEnv();
 
+    // 每周自动清理一次旧缓存（保留本站内置材料，清外部实时音频）
+    weeklyCacheClean();
+
+    // 每晚 23 点自动更新资料（页面开着到点触发；到点后才打开则补更新）
+    scheduleDailyUpdate();
+
     // 联网时拉取最新实时资料（每 6 小时最多一次）
     if (navigator.onLine !== false) {
       const lastFetch = loadLS('last_news_fetch', '');
       const h = Math.floor(Date.now()/3600000);
-      if (lastFetch !== String(h)) fetchLiveAll();
+      if (lastFetch !== String(h)) fetchLiveAll(false, allowAudioPrecache());
     }
     checkVersion();
+  }
+
+  // 每周清理一次旧音频缓存：只删外部实时资料，保留本站内置材料；
+  // 下次联网自动更新会重新缓存最新内容
+  async function weeklyCacheClean(){
+    const last = Number(loadLS('last_cache_clean', '0'));
+    if (Date.now() - last < 7*86400000) return;
+    saveLS('last_cache_clean', String(Date.now()));
+    if (!window.caches) return;
+    try {
+      const cache = await caches.open('hl_audio');
+      const keys = await cache.keys();
+      const host = location.hostname;
+      let removed = 0;
+      for (const req of keys) {
+        try {
+          const u = new URL(req.url);
+          if (u.hostname !== host) { await cache.delete(req); removed++; }
+        } catch(e){}
+      }
+      if (removed) toast('已自动清理 '+removed+' 个旧听力缓存');
+    } catch(e){}
+  }
+
+  // 每晚 23 点自动更新听力资料
+  function scheduleDailyUpdate(){
+    const now = new Date();
+    const today = todayStr();
+    if (loadLS('last_auto_update', '') === today) return; // 今天已自动更新过
+    const target = new Date(now);
+    target.setHours(23, 0, 0, 0);
+    const doUpdate = () => {
+      saveLS('last_auto_update', todayStr());
+      fetchLiveAll(true, allowAudioPrecache());
+      checkVersion();
+    };
+    if (now >= target) {
+      // 已过 23 点且今天还没自动更新 → 补更新
+      doUpdate();
+    } else {
+      setTimeout(doUpdate, target - now);
+    }
   }
 
   function setupEnv(){
@@ -1140,7 +1239,7 @@
     // 页面退出/切后台瞬间保存断点（刷新、关标签前兜底）
     document.addEventListener('visibilitychange', () => { if (document.hidden) saveResume(); });
     window.addEventListener('pagehide', () => { saveResume(); });
-    window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); if (state.activeId) fetchLiveAll(); });
+    window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); if (state.activeId) fetchLiveAll(false, allowAudioPrecache()); });
     window.addEventListener('offline', ()=>{ state.offline=true; toast('已离线，可继续收听'); });
     if (!synth && !$('audioEl')) toast('当前浏览器不支持语音朗读');
   }
@@ -1177,7 +1276,15 @@
   }
 
   /* ---------- 实时资料拉取（多源：新闻 / 播客 / 故事） ---------- */
-  async function fetchLiveAll(silent){
+  // 是否允许批量预下载音频：有网络类型 API 且为 Wi-Fi/有线才下载；
+  // iOS Safari 无此 API，保守不批量下载（避免手机流量），音频播放时按需缓存
+  function allowAudioPrecache(){
+    const c = navigator.connection;
+    if (c && c.type) return c.type === 'wifi' || c.type === 'ethernet';
+    return false;
+  }
+
+  async function fetchLiveAll(silent, precache){
     saveLS('last_news_fetch', String(Math.floor(Date.now()/3600000)));
     if (state.offline) return false;
     const items = [];
@@ -1215,14 +1322,16 @@
       const d = curData();
       d.liveCache = { date: state.liveDate, items: items };
       saveCurData(d);
-      // 预缓存音频（Service Worker）
-      items.forEach(ep => {
-        if (window.caches && ep.audio) {
-          fetch(ep.audio, {mode:'cors'}).then(r => {
-            if (r.ok) caches.open('hl_audio').then(c => c.put(ep.audio, r));
-          }).catch(()=>{});
-        }
-      });
+      // 预缓存音频（Service Worker）——仅手动更新/确认 Wi-Fi 时批量下载
+      if (precache !== false) {
+        items.forEach(ep => {
+          if (window.caches && ep.audio) {
+            fetch(ep.audio, {mode:'cors'}).then(r => {
+              if (r.ok) caches.open('hl_audio').then(c => c.put(ep.audio, r));
+            }).catch(()=>{});
+          }
+        });
+      }
       buildPlaylist();
       // 拉新后仍定位到上次听的条目（找不到则保持，由续听卡片提示）
       locateResume();
@@ -1256,7 +1365,7 @@
       btn.querySelector('.ub-label').textContent = '更新中…';
     }
     try {
-      const ok = await fetchLiveAll(true);
+      const ok = await fetchLiveAll(true, true);
       await checkVersion();
       if (ok) toast('听力资料已更新到最新');
       else toast('暂无新内容，请检查网络后重试');
@@ -1692,12 +1801,36 @@
       }).join('') + '</div>';
     }
 
+    // 连续达标天数（今天还没听不算断）
+    let streak = 0;
+    for (let i = daysIn - 1; i >= 0; i--) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const sec = (state.history[key] && state.history[key].seconds) || 0;
+      if (sec >= DAILY_GOAL_SEC) streak++;
+      else if (i === daysIn - 1) continue;
+      else break;
+    }
+    // 成绩等级与评语
+    const grade = goalPct >= 100 ? 'S' : goalPct >= 80 ? 'A' : goalPct >= 60 ? 'B' : goalPct >= 40 ? 'C' : 'D';
+    const comment = {
+      S: '超额完成目标，听力状态极佳',
+      A: '表现优秀，继续保持',
+      B: '稳中有进，再坚持一下',
+      C: '慢慢积累，每天进步一点',
+      D: '本周还没进入状态，明天开始吧'
+    }[grade];
+
     document.querySelectorAll('#periodTabs button').forEach(b => b.classList.toggle('on', b.dataset.period === period));
 
-    let html = '<div class="weekly-hero">'+
-      '<div class="big">'+totalMin+'<span class="unit"> 分钟</span></div>'+
-      '<div class="sub">'+periodLabel+'总听力时长 · 目标完成率 '+goalPct+'%</div>'+
-      (metDays>0 ? '<div class="streak">'+metDays+' 天达成 30 分钟目标</div>' : '<div class="streak" style="background:var(--bg-soft);color:var(--ink-faint)">'+periodLabel+'还未达成目标</div>')+
+    let html = '<div class="report-card grade-'+grade+'">'+
+      '<div class="report-grade">'+grade+'</div>'+
+      '<div class="report-body">'+
+        '<div class="report-title">'+periodLabel+'成绩单</div>'+
+        '<div class="report-row">总时长 <b>'+totalMin+'</b> 分钟 · 目标完成 <b>'+goalPct+'</b>%</div>'+
+        '<div class="report-row">达成 <b>'+metDays+'</b> 天 · 连续 <b>'+streak+'</b> 天</div>'+
+        '<div class="report-comment">'+comment+'</div>'+
+      '</div>'+
       '</div>'+
       '<div class="section-title">主题分布</div>'+
       '<div class="topic-bar">'+
@@ -1942,7 +2075,7 @@
     if (navigator.onLine !== false) {
       const lastFetch = loadLS('last_news_fetch','');
       const h = Math.floor(Date.now()/3600000);
-      if (lastFetch !== String(h)) fetchLiveAll();
+      if (lastFetch !== String(h)) fetchLiveAll(false, allowAudioPrecache());
     }
   }
 
