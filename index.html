@@ -101,16 +101,16 @@
     inset: 20px;
     border-radius: 50%;
     border: none;
-    background: var(--ink);
+    background: var(--topic, var(--ink));
     color: var(--bg);
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    transition: transform 0.15s ease, background 0.2s;
+    transition: transform 0.15s ease, background 0.25s;
     box-shadow: var(--shadow);
   }
   .play-btn:active { transform: scale(0.96); }
   .play-btn svg { width: 48px; height: 48px; fill: currentColor; }
-  .play-btn.playing { background: var(--accent); }
+  .play-btn.playing { background: var(--topic, var(--accent)); }
 
   /* 今日时长 */
   .today-stats {
@@ -216,6 +216,12 @@
     font-size: 13px;
     color: var(--ink-soft);
     display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .now-playing .np-src {
+    margin-top: 5px;
+    font-size: 11px;
+    color: var(--ink-faint);
+    line-height: 1.5;
   }
   .tag {
     display: inline-block;
@@ -716,6 +722,114 @@
   .update-btn.loading .ub-icon { animation: ub-spin 1s linear infinite; }
   @keyframes ub-spin { to { transform: rotate(360deg); } }
 
+  /* 听力资料折叠列表 */
+  .lib {
+    margin: 20px 0 6px;
+    border-top: 1px solid var(--line);
+  }
+  .lib-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 2px;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .lib-name { font-size: 15px; font-weight: 650; }
+  .lib-count { margin-left: auto; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .lib-chev {
+    width: 18px; height: 18px;
+    fill: none; stroke: var(--ink-soft); stroke-width: 1.6;
+    stroke-linecap: round; stroke-linejoin: round;
+    transition: transform .2s ease;
+  }
+  .lib.open .lib-chev { transform: rotate(180deg); }
+  .lib-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows .25s ease;
+  }
+  .lib.open .lib-body { grid-template-rows: 1fr; }
+  .lib-inner { overflow: hidden; }
+  .lib-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0 10px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .lib-chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    padding: 6px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 12px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .chip.on[data-topic="daily"]   { background: #2D5A3D; border-color: #2D5A3D; }
+  .chip.on[data-topic="news"]    { background: #B8923A; border-color: #B8923A; }
+  .chip.on[data-topic="drama"]   { background: #6B3A6B; border-color: #6B3A6B; }
+  .chip.on[data-topic="podcast"] { background: #3A5B8C; border-color: #3A5B8C; }
+  .chip.on[data-topic="story"]   { background: #8C4A3A; border-color: #8C4A3A; }
+
+  .lib-list { max-height: 360px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .lib-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 12px 2px 10px;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    font: inherit;
+    cursor: pointer;
+  }
+  .lib-item:last-child { border-bottom: 0; }
+  .lib-item:active { background: var(--bg-soft); }
+  .li-top { display: flex; align-items: center; gap: 8px; }
+  .li-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .li-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .li-pct {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .li-pct.done { color: #2D5A3D; font-weight: 600; }
+  .li-sub {
+    display: flex;
+    gap: 5px;
+    margin: 5px 0 0 16px;
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  .li-bar {
+    margin: 8px 0 0 16px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--bg-soft);
+    overflow: hidden;
+  }
+  .li-fill { height: 100%; border-radius: 2px; transition: width .2s; }
+
   .btn.danger {
     background: transparent;
     color: #B3483C;
@@ -906,6 +1020,7 @@
       <span class="tag" id="npTag">--</span>
       <span id="npDuration">--</span>
     </div>
+    <div class="np-src" id="npSource">--</div>
   </div>
 
   <div class="progress-wrap" id="progressWrap" style="display:none">
@@ -930,6 +1045,21 @@
   </div>
 
   <div class="up-next" id="upNext"></div>
+
+  <!-- 听力资料（可下拉选择，显示每条完成进度） -->
+  <div class="lib" id="libWrap">
+    <button class="lib-head" id="libToggle" aria-expanded="false">
+      <span class="lib-name">听力资料</span>
+      <span class="lib-count" id="libCount">--</span>
+      <svg class="lib-chev" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg>
+    </button>
+    <div class="lib-body" id="libBody">
+      <div class="lib-inner">
+        <div class="lib-chips" id="libChips"></div>
+        <div class="lib-list" id="libList"></div>
+      </div>
+    </div>
+  </div>
 
   <button class="update-btn" id="updateBtn">
     <svg class="ub-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
@@ -1074,6 +1204,8 @@
     playing: false, paused: false,
     wordIdx: 0, totalWords: 0, tickTimer: null,
     posEp: '', posTime: -1,
+    lp: {},                      // 每条资料的收听进度 {epId:{pos,dur,done,at}}
+    libOpen: false, libFilter: 'all',
     accounts: [], activeId: null,
     liveItems: [], liveDate: '',
     resume: null
@@ -1099,6 +1231,8 @@
       zh:'（英文原版有声故事）', take:3 }
   ];
   const ALL_TOPICS = ['daily','news','drama','podcast','story'];
+  const TOPIC_NAME = { daily:'日常', news:'新闻', drama:'影视', podcast:'播客', story:'故事' };
+  const TOPIC_COLOR = { daily:'#2D5A3D', news:'#B8923A', drama:'#6B3A6B', podcast:'#3A5B8C', story:'#8C4A3A' };
 
   /* ---------- 账号存储 ---------- */
   function loadAccounts(){ return loadLSRaw('hl_accounts', []); }
@@ -1130,6 +1264,17 @@
         d.history = merged;
         state.history = merged;
       }
+      // 合并每条资料的收听进度（取更靠后的位置与完成状态）
+      if (disk && disk.lp) {
+        const lp = {};
+        Object.keys(disk.lp).forEach(k => lp[k] = disk.lp[k]);
+        Object.keys(d.lp || {}).forEach(k => {
+          const a = lp[k], b = d.lp[k];
+          lp[k] = a ? { pos:Math.max(a.pos||0, b.pos||0), dur:Math.max(a.dur||0, b.dur||0), done:!!(a.done||b.done), at:Math.max(a.at||0, b.at||0) } : b;
+        });
+        d.lp = lp;
+        state.lp = lp;
+      }
     } catch(e){}
     saveData(state.activeId, d);
   }
@@ -1147,6 +1292,15 @@
     const m = Math.floor(sec/60);
     if (m >= 60) { const h = Math.floor(m/60), mm = m%60; return h + ' 小时 ' + (mm ? mm + ' 分' : '整'); }
     return m + ' 分钟';
+  }
+  // RSS 发布时间 → 简短日期（今年省略年份）
+  function fmtPubDate(str){
+    if (!str) return '';
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const md = (d.getMonth()+1) + '-' + String(d.getDate()).padStart(2,'0');
+    return d.getFullYear() === now.getFullYear() ? md : d.getFullYear() + '-' + md;
   }
   // 已听条目时长：新数据存秒（v:2），旧数据存分钟
   function itemSec(it){ if(!it) return 0; return it.v===2 ? (it.sec||0) : (it.sec||0)*60; }
@@ -1230,7 +1384,7 @@
     // 每周自动清理一次旧缓存（保留本站内置材料，清外部实时音频）
     weeklyCacheClean();
 
-    // 每晚 23 点自动更新资料（页面开着到点触发；到点后才打开则补更新）
+    // 每晚 20:00 自动更新资料（页面开着到点触发；到点后才打开则补更新）
     scheduleDailyUpdate();
 
     // 联网时拉取最新实时资料（每 6 小时最多一次）
@@ -1264,20 +1418,20 @@
     } catch(e){}
   }
 
-  // 每晚 23 点自动更新听力资料
+  // 每晚 20:00 自动更新听力资料
   function scheduleDailyUpdate(){
     const now = new Date();
     const today = todayStr();
     if (loadLS('last_auto_update', '') === today) return; // 今天已自动更新过
     const target = new Date(now);
-    target.setHours(23, 0, 0, 0);
+    target.setHours(20, 0, 0, 0);
     const doUpdate = () => {
       saveLS('last_auto_update', todayStr());
       fetchLiveAll(true, allowAudioPrecache());
       checkVersion();
     };
     if (now >= target) {
-      // 已过 23 点且今天还没自动更新 → 补更新
+      // 已过 20:00 且今天还没自动更新 → 补更新
       doUpdate();
     } else {
       setTimeout(doUpdate, target - now);
@@ -1340,6 +1494,7 @@
     state.playlist = live.concat(dailyDrama);
     if (!state.playlist.length) state.playlist = MATERIALS.slice();
     state.currentIndex = 0;
+    renderLib();
   }
 
   /* ---------- 实时资料拉取（多源：新闻 / 播客 / 故事） ---------- */
@@ -1371,6 +1526,7 @@
           const desc = (it.querySelector('description')?.textContent || '')
             .replace(/<!\[CDATA\[/g,'').replace(/\]\]>/g,'')
             .replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+          const pubRaw = (it.querySelector('pubDate')?.textContent || '').trim();
           items.push({
             id: feed.id + '_' + stableHash(title),
             topic: feed.topic,
@@ -1378,7 +1534,8 @@
             audio: audio,
             en: (desc || title).substring(0, 700),
             zh: feed.zh,
-            isAudio: true, source: feed.label
+            isAudio: true, source: feed.label,
+            date: fmtPubDate(pubRaw)
           });
         }
       } catch(e) { console.warn('feed fetch failed:', feed.id, e); }
@@ -1744,6 +1901,16 @@
         }
         state.posEp = ep.id;
         state.posTime = audioPos;
+        // 记录本条资料的完成进度（听力资料列表显示百分比 / 已听完）
+        if (audioPos > 0) {
+          state.lp = state.lp || {};
+          const lrec = state.lp[ep.id] || { pos:0, dur:0, done:false, at:0 };
+          lrec.pos = audioPos;
+          if (isFinite(a.duration) && a.duration > 0) lrec.dur = a.duration;
+          if (lrec.dur && lrec.pos / lrec.dur >= 0.95) lrec.done = true;
+          lrec.at = Date.now();
+          state.lp[ep.id] = lrec;
+        }
       }
       state.history[today].seconds += add;
       // 按主题累计实际听力秒数（成绩单的主题分布与总时长同口径）
@@ -1759,8 +1926,10 @@
       }
       if (saveAcc >= 5) {
         saveAcc = 0;
-        saveCurData({...curData(), history: state.history});
+        saveCurData({...curData(), history: state.history, lp: state.lp});
         saveResume();
+        if (state.libOpen) renderLib();
+        renderNowPlaying();
       }
       renderToday();
     }, 1000);
@@ -1797,13 +1966,53 @@
     // 未播放且这条正是上次听到的 → 显示续听位置；否则显示第几段/来源
     const r = state.resume;
     const isResumeTarget = !state.playing && r && (r.epId === ep.id || r.title === ep.title);
-    const heardMark = heardIds().has(ep.id) ? '✓ 已听过 · ' : '';
-    $('npDuration').textContent = (heardMark || '') + (isResumeTarget
-      ? '上次听到 ' + fmtTime(r.time || 0)
-      : (state.currentIndex+1) + '/' + state.playlist.length + ' · ' + (ep.isAudio ? (ep.source ? ep.source : '音频') : '朗读'));
+    const lpP = libProgress(ep);
+    const heardMark = lpP.done ? '✓ 已听完 · ' : (lpP.heard ? '✓ 已听 ' + Math.min(100,Math.round(lpP.pct*100)) + '% · ' : '');
+    $('npDuration').textContent = (heardMark || '') + (isResumeTarget ? '上次听到 ' + fmtTime(r.time || 0) + ' · ' : '') + (state.currentIndex+1) + '/' + state.playlist.length;
+    // 来源与发布时间
+    const srcLine = (ep.source || ('内置' + (TOPIC_NAME[ep.topic] || '材料'))) + (ep.date ? ' · 发布于 ' + ep.date : ' · 预录音频');
+    $('npSource').textContent = srcLine;
     $('progressWrap').style.display = 'block';
     const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
     if (nextEp) $('upNext').textContent = '下一段：' + nextEp.title;
+    // 大圆圈随当前主题变色
+    document.documentElement.style.setProperty('--topic', TOPIC_COLOR[ep.topic] || '#2D5A3D');
+  }
+
+  // 单条资料的完成进度（0~1 / 是否已听完）
+  function libProgress(ep){
+    const r = state.lp && state.lp[ep.id];
+    if (!r) return { pct:0, done:false, heard:false };
+    const pct = r.dur > 0 ? Math.min(1, (r.pos||0)/r.dur) : 0;
+    return { pct: pct, done: !!r.done || pct >= 0.95, heard: true };
+  }
+
+  // 听力资料列表（首页可下拉，显示每条听完百分比）
+  function renderLib(){
+    if (!$('libWrap')) return;
+    $('libCount').textContent = '共 ' + state.playlist.length + ' 条';
+    const filters = [['all','全部'],['daily','日常'],['news','新闻'],['drama','影视'],['podcast','播客'],['story','故事']];
+    $('libChips').innerHTML = filters.map(([k,n]) =>
+      '<button class="chip ' + (state.libFilter===k?'on':'') + '" data-topic="' + k + '">' + n + '</button>').join('');
+    const rows = state.playlist.map((ep, i) => ({ep:ep, i:i}))
+      .filter(x => state.libFilter === 'all' || x.ep.topic === state.libFilter);
+    if (!rows.length) { $('libList').innerHTML = '<div class="loading">这个主题暂时没有内容</div>'; return; }
+    $('libList').innerHTML = rows.map(({ep, i}) => {
+      const p = libProgress(ep);
+      const color = TOPIC_COLOR[ep.topic] || '#2D5A3D';
+      const pct = Math.min(100, Math.round(p.pct*100));
+      const right = p.done ? '<span class="li-pct done">已听完 ✓</span>'
+                   : p.heard ? '<span class="li-pct">已听 ' + pct + '%</span>'
+                   : '<span class="li-pct">未听</span>';
+      const srcTxt = ep.source || ('内置' + (TOPIC_NAME[ep.topic] || ''));
+      const dateTxt = ep.date ? (' · ' + ep.date) : (ep.source ? '' : ' · 预录');
+      return '<button class="lib-item" data-idx="' + i + '">' +
+        '<div class="li-top"><span class="li-dot" style="background:' + color + '"></span>' +
+        '<span class="li-title">' + (ep.title || '未命名') + '</span>' + right + '</div>' +
+        '<div class="li-sub">' + srcTxt + dateTxt + ' · ' + (ep.isAudio ? '音频' : '朗读') + '</div>' +
+        '<div class="li-bar"><div class="li-fill" style="width:' + (p.done?100:pct) + '%;background:' + color + '"></div></div>' +
+        '</button>';
+    }).join('');
   }
 
   function renderTranscript(){
@@ -2192,6 +2401,7 @@
       state.liveItems = []; state.liveDate = '';
     }
     state.resume = d.resume || null;
+    state.lp = d.lp || {};
     state.settings.speed = state.settings.speed || 1.0;
     state.settings.topics = state.settings.topics || ['daily','news','drama','podcast','story'];
     buildPlaylist();
@@ -2297,6 +2507,28 @@
     $('speedBtn').onclick = cycleSpeed;
     $('speedBtn').textContent = state.settings.speed.toFixed(2).replace(/\.?0+$/,'')+'x';
 
+    // 听力资料折叠列表（下拉展开、按主题筛选、点选即播）
+    $('libToggle').onclick = () => {
+      state.libOpen = !state.libOpen;
+      $('libWrap').classList.toggle('open', state.libOpen);
+      $('libToggle').setAttribute('aria-expanded', state.libOpen ? 'true' : 'false');
+      if (state.libOpen) renderLib();
+    };
+    $('libChips').addEventListener('click', e => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      state.libFilter = chip.dataset.topic;
+      renderLib();
+    });
+    $('libList').addEventListener('click', e => {
+      const item = e.target.closest('.lib-item');
+      if (!item) return;
+      state.libOpen = false;
+      $('libWrap').classList.remove('open');
+      $('libToggle').setAttribute('aria-expanded', 'false');
+      playEpisode(Number(item.dataset.idx));
+    });
+
     // 真实音频事件（CGTN 条目）
     const a = $('audioEl');
     a.addEventListener('play', () => {
@@ -2315,7 +2547,15 @@
     a.addEventListener('timeupdate', updateProgress);
     a.addEventListener('ended', () => {
       stopTick(); state.playing = false; updatePlayIcon(false);
+      // 记录已听完（听力列表标"已听完"、下次打开自动换新）
+      const finEp = state.playlist[state.currentIndex];
+      if (finEp && finEp.isAudio) {
+        state.lp = state.lp || {};
+        state.lp[finEp.id] = { pos: a.duration||0, dur: a.duration||0, done:true, at: Date.now() };
+      }
       markEpisodeDone();
+      renderLib();
+      saveCurData({...curData(), history: state.history, lp: state.lp});
       // 下一段开头作为新的续听点
       const nextIdx = (state.currentIndex + 1) % state.playlist.length;
       const nextEp = state.playlist[nextIdx];
