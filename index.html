@@ -474,56 +474,74 @@
     font-weight: 600;
   }
 
-  /* 学习成绩单卡片 */
+  /* 学习成绩单 */
   .report-card {
-    display: flex;
-    gap: 16px;
-    align-items: stretch;
     background: #fff;
     border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 18px 16px;
+    border-radius: 20px;
+    padding: 20px 18px 16px;
     margin: 20px 0 4px;
   }
-  .report-grade {
+  .rc-head { display: flex; align-items: center; gap: 18px; }
+  .rc-grade {
     flex-shrink: 0;
-    width: 64px; height: 64px;
+    width: 68px; height: 68px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
+    font-size: 32px;
     font-weight: 700;
     color: #fff;
     background: var(--accent);
   }
-  .report-card.grade-S .report-grade { background: #B8923A; box-shadow: 0 0 0 4px rgba(184,146,58,0.15); }
-  .report-card.grade-A .report-grade { background: #2D5A3D; }
-  .report-card.grade-B .report-grade { background: #3A5B8C; }
-  .report-card.grade-C .report-grade { background: #B06B3A; }
-  .report-card.grade-D .report-grade { background: #8A8A85; }
-  .report-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-  .report-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--ink);
-    margin-bottom: 6px;
-  }
-  .report-row {
-    font-size: 13px;
+  .grade-S .rc-grade { background: #B8923A; box-shadow: 0 0 0 5px rgba(184,146,58,0.14); }
+  .grade-A .rc-grade { background: #2D5A3D; }
+  .grade-B .rc-grade { background: #3A5B8C; }
+  .grade-C .rc-grade { background: #B06B3A; }
+  .grade-D .rc-grade { background: #8A8A85; }
+  .rc-score { min-width: 0; }
+  .rc-pct { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .rc-pct span { font-size: 16px; font-weight: 500; color: var(--ink-soft); margin-left: 1px; }
+  .rc-pct-label { font-size: 12px; color: var(--ink-faint); margin-top: 5px; }
+  .rc-period {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
     color: var(--ink-soft);
-    line-height: 1.7;
+    font-variant-numeric: tabular-nums;
   }
-  .report-row b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .report-comment {
-    margin-top: 8px;
+  .rc-grid {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .rc-cell {
+    background: var(--bg-soft);
+    border-radius: 12px;
+    padding: 10px 12px;
+    min-width: 0;
+  }
+  .rc-val {
+    font-size: 16px;
+    font-weight: 650;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .rc-key { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
+  .rc-comment {
+    display: inline-block;
+    margin-top: 12px;
     font-size: 12px;
     color: var(--accent);
     background: var(--accent-soft);
-    padding: 5px 10px;
+    padding: 6px 10px;
     border-radius: 8px;
-    align-self: flex-start;
   }
+  .rc-note { margin-top: 8px; font-size: 11px; color: var(--ink-faint); line-height: 1.5; }
 
   .section-title {
     font-size: 13px;
@@ -1091,7 +1109,30 @@
   function loadData(id){ return loadLSRaw(dataKey(id), { settings:{}, history:{}, newsCache:null }); }
   function saveData(id, data){ saveLSRaw(dataKey(id), data); }
   function curData(){ return loadData(state.activeId); }
-  function saveCurData(d){ if (state.activeId) saveData(state.activeId, d); }
+  function saveCurData(d){
+    if (!state.activeId) return;
+    // 与磁盘最新数据合并后再写：避免多个标签页/主屏幕同时打开时互相覆盖，导致时长丢失
+    try {
+      const disk = loadData(state.activeId);
+      if (disk && disk.history) {
+        const merged = d.history || {};
+        Object.keys(disk.history).forEach(k => {
+          const a = disk.history[k] || {};
+          const b = merged[k];
+          if (!b) { merged[k] = a; return; }
+          const items = (b.items || []).slice();
+          (a.items || []).forEach(it => { if (!items.find(x => x.id === it.id)) items.push(it); });
+          const topic = {};
+          Object.keys(a.topic || {}).forEach(t => topic[t] = a.topic[t]);
+          Object.keys(b.topic || {}).forEach(t => topic[t] = Math.max(topic[t] || 0, b.topic[t] || 0));
+          merged[k] = { seconds: Math.max(a.seconds || 0, b.seconds || 0), items: items, topic: topic };
+        });
+        d.history = merged;
+        state.history = merged;
+      }
+    } catch(e){}
+    saveData(state.activeId, d);
+  }
   function loadLSRaw(k,d){ try{const v=localStorage.getItem(k); return v?JSON.parse(v):d;}catch(e){return d;} }
   function saveLSRaw(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} }
 
@@ -1099,6 +1140,14 @@
   function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function fmtTime(sec){ if(!sec||isNaN(sec))return '0:00'; sec=Math.floor(sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
   function fmtMin(sec){ return Math.round(sec/60); }
+  // 时长展示：不足 1 分显示秒，满 1 小时显示"X 小时 Y 分"
+  function fmtDur(sec){
+    sec = Math.round(sec||0);
+    if (sec < 60) return sec + ' 秒';
+    const m = Math.floor(sec/60);
+    if (m >= 60) { const h = Math.floor(m/60), mm = m%60; return h + ' 小时 ' + (mm ? mm + ' 分' : '整'); }
+    return m + ' 分钟';
+  }
   // 已听条目时长：新数据存秒（v:2），旧数据存分钟
   function itemSec(it){ if(!it) return 0; return it.v===2 ? (it.sec||0) : (it.sec||0)*60; }
   function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
@@ -1240,8 +1289,13 @@
       navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
     // 页面退出/切后台瞬间保存断点（刷新、关标签前兜底）
-    document.addEventListener('visibilitychange', () => { if (document.hidden) saveResume(); });
-    window.addEventListener('pagehide', () => { saveResume(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { saveResume(); saveCurData({...curData(), history: state.history}); }
+    });
+    window.addEventListener('pagehide', () => {
+      saveResume();
+      saveCurData({...curData(), history: state.history});
+    });
     window.addEventListener('online', ()=>{ state.offline=false; toast('网络已连接'); if (state.activeId) fetchLiveAll(false, allowAudioPrecache()); });
     window.addEventListener('offline', ()=>{ state.offline=true; toast('已离线，可继续收听'); });
     if (!synth && !$('audioEl')) toast('当前浏览器不支持语音朗读');
@@ -1703,7 +1757,7 @@
         state.history[today].items.push({ id:ep.id, topic:ep.topic, title:ep.title, sec:Math.round(audioPos)||1, done:false, v:2 });
         renderNowPlaying();
       }
-      if (saveAcc >= 10) {
+      if (saveAcc >= 5) {
         saveAcc = 0;
         saveCurData({...curData(), history: state.history});
         saveResume();
@@ -1767,14 +1821,14 @@
   function renderToday(){
     const today = state.history[todayStr()] || { seconds:0, items:[] };
     const sec = today.seconds||0;
-    const min = fmtMin(sec);
+    const min = Math.floor(sec/60);   // 已听向下取整，避免"显示够了其实还差几秒"
     $('todaySeconds').textContent = min;
     const pct = Math.min(1, sec/DAILY_GOAL_SEC);
     $('ringFg').style.strokeDashoffset = RING_CIRC * (1-pct);
     if (sec >= DAILY_GOAL_SEC) {
       $('todayLabel').innerHTML = '<span class="goal-done">今日目标已达成</span> · 已听 '+min+' 分钟，继续保持';
     } else {
-      const remain = Math.max(0, Math.round((DAILY_GOAL_SEC-sec)/60));
+      const remain = Math.ceil((DAILY_GOAL_SEC-sec)/60);
       $('todayLabel').textContent = '今日目标 30 分钟 · 还差 '+remain+' 分钟';
     }
   }
@@ -1786,12 +1840,23 @@
 
   function renderSummary(period){
     const now = new Date();
-    let start;
-    if (period === 'week') { const day = now.getDay()||7; start = new Date(now); start.setDate(now.getDate()-day+1); }
-    else if (period === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); }
-    else { start = new Date(now.getFullYear(), 0, 1); }
-    start.setHours(0,0,0,0);
+    let start, end;
+    if (period === 'week') {
+      const day = now.getDay()||7;
+      start = new Date(now); start.setDate(now.getDate()-day+1);
+      end = new Date(start); end.setDate(start.getDate()+6);
+    }
+    else if (period === 'month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    }
+    else {
+      start = new Date(now.getFullYear(), 0, 1);
+      end = new Date(now.getFullYear(), 11, 31);
+    }
+    start.setHours(0,0,0,0); end.setHours(0,0,0,0);
     const daysIn = Math.floor((now - start)/86400000) + 1;
+    const fmtDateCN = d => (d.getMonth()+1)+'月'+d.getDate()+'日';
 
     let totalSec=0;
     let dailySecs=[];
@@ -1828,7 +1893,6 @@
       });
     }
     const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama+topicSecs.podcast+topicSecs.story || 1;
-    const totalMin = fmtMin(totalSec);
     const goalTotal = DAILY_GOAL_SEC * daysIn;
     const goalPct = Math.round(totalSec/goalTotal*100);
     const periodLabel = {week:'本周',month:'本月',year:'今年'}[period] || '';
@@ -1873,17 +1937,27 @@
       C: '慢慢积累，每天进步一点',
       D: '本周还没进入状态，明天开始吧'
     }[grade];
+    const avgSec = daysIn > 0 ? totalSec/daysIn : 0;
 
     document.querySelectorAll('#periodTabs button').forEach(b => b.classList.toggle('on', b.dataset.period === period));
 
     let html = '<div class="report-card grade-'+grade+'">'+
-      '<div class="report-grade">'+grade+'</div>'+
-      '<div class="report-body">'+
-        '<div class="report-title">'+periodLabel+'成绩单</div>'+
-        '<div class="report-row">总时长 <b>'+totalMin+'</b> 分钟 · 目标完成 <b>'+goalPct+'</b>%</div>'+
-        '<div class="report-row">达成 <b>'+metDays+'</b> 天 · 连续 <b>'+streak+'</b> 天</div>'+
-        '<div class="report-comment">'+comment+'</div>'+
+      '<div class="rc-head">'+
+        '<div class="rc-grade">'+grade+'</div>'+
+        '<div class="rc-score">'+
+          '<div class="rc-pct">'+goalPct+'<span>%</span></div>'+
+          '<div class="rc-pct-label">目标完成率</div>'+
+        '</div>'+
       '</div>'+
+      '<div class="rc-period">'+fmtDateCN(start)+' – '+fmtDateCN(end)+' · '+periodLabel+'</div>'+
+      '<div class="rc-grid">'+
+        '<div class="rc-cell"><div class="rc-val">'+fmtDur(totalSec)+'</div><div class="rc-key">总听力时长</div></div>'+
+        '<div class="rc-cell"><div class="rc-val">'+fmtDur(avgSec)+'</div><div class="rc-key">日均时长</div></div>'+
+        '<div class="rc-cell"><div class="rc-val">'+metDays+' / '+daysIn+' 天</div><div class="rc-key">达成 30 分钟</div></div>'+
+        '<div class="rc-cell"><div class="rc-val">'+streak+' 天</div><div class="rc-key">连续打卡</div></div>'+
+      '</div>'+
+      '<div class="rc-comment">'+comment+'</div>'+
+      '<div class="rc-note">统计口径：仅累计音频真实播放时间，暂停、拖动进度、跳段均不计入</div>'+
       '</div>'+
       '<div class="section-title">主题分布</div>'+
       '<div class="topic-bar">'+
