@@ -5,7 +5,7 @@
    - RSS/API 请求：网络优先（拿最新内容）
 */
 
-const CACHE_STATIC = 'hl_static_v3';
+const CACHE_STATIC = 'hl_static_v4';
 const CACHE_AUDIO = 'hl_audio';
 const STATIC_ASSETS = [
   './index.html',
@@ -59,7 +59,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // RSS / 资料源：网络优先（拿最新内容），失败读缓存
-  if (/\.(xml|rss)(\?|$)/.test(url.href) || url.hostname.includes('ximalaya') || url.hostname.includes('simplecast') || url.hostname.includes('captivate') || url.hostname.includes('news.cgtn.com')) {
+  if (/\.(xml|rss)(\?|$)/.test(url.href) || url.hostname.includes('ximalaya') || url.hostname.includes('simplecast') || url.hostname.includes('captivate') || url.hostname.includes('news.cgtn.com') || url.hostname.includes('redcircle')) {
     event.respondWith(
       fetch(req).then(resp => {
         if (resp.ok) {

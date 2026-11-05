@@ -89,13 +89,41 @@
   }
   .circle-wrap .ring-fg {
     fill: none;
-    stroke: var(--accent);
+    stroke: var(--topic, var(--accent));
     stroke-width: 8;
     stroke-linecap: round;
     stroke-dasharray: 660;
     stroke-dashoffset: 660;
-    transition: stroke-dashoffset 0.4s ease;
+    transition: stroke-dashoffset 0.4s ease, stroke 0.3s;
   }
+  /* 沿环奔跑的小狐狸（纯矢量，不额外下载任何资源） */
+  .runner {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 0; height: 0;
+    --ang: 0deg;
+    transform: rotate(var(--ang)) translateY(-114px) rotate(90deg);
+    transition: transform 0.45s cubic-bezier(.35,0,.25,1);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .runner svg {
+    position: absolute;
+    width: 30px; height: 26px;
+    left: -15px; top: -13px;
+    color: var(--topic, var(--ink));
+    overflow: visible;
+  }
+  .runner.running svg { animation: fox-run .55s ease-in-out infinite; }
+  @keyframes fox-run {
+    0%,100% { transform: translateY(0) scaleX(1); }
+    50%     { transform: translateY(-2.5px) scaleX(1.03); }
+  }
+  /* 环下连绵青山 */
+  .hills { width: 208px; height: 34px; margin: -14px 0 6px; }
+  .hills svg { width: 100%; height: 100%; display: block; }
+  .hills .h-far  { fill: var(--topic, var(--accent)); opacity: .14; }
+  .hills .h-near { fill: var(--topic, var(--accent)); opacity: .26; }
   .play-btn {
     position: absolute;
     inset: 20px;
@@ -233,7 +261,7 @@
   }
   .tag.news { background: #EAE3D8; color: #7A5A2E; }
   .tag.daily { background: #E4EDE6; color: #2D5A3D; }
-  .tag.drama { background: #E8E0E8; color: #6B3A6B; }
+  .tag.topics { background: #E8E0E8; color: #6B3A6B; }
   .tag.podcast { background: #E2E8EF; color: #3A5B8C; }
   .tag.story { background: #F0E4E0; color: #8C4A3A; }
 
@@ -569,7 +597,7 @@
   .topic-bar .seg { height: 100%; }
   .topic-bar .seg.daily { background: #2D5A3D; }
   .topic-bar .seg.news { background: #B8923A; }
-  .topic-bar .seg.drama { background: #6B3A6B; }
+  .topic-bar .seg.topics { background: #6B3A6B; }
   .topic-bar .seg.podcast { background: #3A5B8C; }
   .topic-bar .seg.story { background: #8C4A3A; }
   .legend {
@@ -778,7 +806,7 @@
   .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
   .chip.on[data-topic="daily"]   { background: #2D5A3D; border-color: #2D5A3D; }
   .chip.on[data-topic="news"]    { background: #B8923A; border-color: #B8923A; }
-  .chip.on[data-topic="drama"]   { background: #6B3A6B; border-color: #6B3A6B; }
+  .chip.on[data-topic="topics"]  { background: #6B3A6B; border-color: #6B3A6B; }
   .chip.on[data-topic="podcast"] { background: #3A5B8C; border-color: #3A5B8C; }
   .chip.on[data-topic="story"]   { background: #8C4A3A; border-color: #8C4A3A; }
 
@@ -972,6 +1000,7 @@
     .home { padding-top: 60px; }
     .circle-wrap { width: 280px; height: 280px; }
   }
+  @property --ang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 </style>
 </head>
 <body>
@@ -991,9 +1020,28 @@
       <circle class="ring-bg" cx="110" cy="110" r="105"/>
       <circle class="ring-fg" id="ringFg" cx="110" cy="110" r="105"/>
     </svg>
+    <div class="runner" id="runner" aria-hidden="true">
+      <svg viewBox="0 0 28 24">
+        <path d="M7.2 15.2 C 3.4 15.4 1.2 12.4 1.9 9.2 C 3.9 11.4 5.8 11.6 7.4 12.2 Z" fill="currentColor"/>
+        <ellipse cx="12.6" cy="13.6" rx="6.1" ry="4.1" fill="currentColor"/>
+        <circle cx="19.2" cy="10.2" r="3.5" fill="currentColor"/>
+        <path d="M16.9 7.8 L 16.1 3.9 L 19.4 7.1 Z" fill="currentColor"/>
+        <path d="M20.4 7.4 L 21.6 3.6 L 22.6 7.7 Z" fill="currentColor"/>
+        <path d="M9.4 17.2 L 9 20.9 M13.1 17.5 L 12.9 20.9 M16.2 17 L 16.4 20.3"
+              stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        <circle cx="20.4" cy="9.7" r=".95" fill="#fff"/>
+      </svg>
+    </div>
     <button class="play-btn" id="playBtn" aria-label="播放/暂停">
       <svg id="playIcon" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg>
     </button>
+  </div>
+
+  <div class="hills" aria-hidden="true">
+    <svg viewBox="0 0 208 34" preserveAspectRatio="none">
+      <path class="h-far"  d="M0 22 Q 20 6 40 19 T 80 15 T 120 20 T 160 14 T 208 19 L 208 34 L 0 34 Z"/>
+      <path class="h-near" d="M0 28 Q 26 14 52 26 T 104 24 T 156 28 T 208 25 L 208 34 L 0 34 Z"/>
+    </svg>
   </div>
 
   <div class="today-stats">
@@ -1092,7 +1140,7 @@
   <h3>主题偏好</h3>
   <div class="row" data-setting="topic" data-value="daily"><span class="label">日常交流</span><span class="value active">已选</span></div>
   <div class="row" data-setting="topic" data-value="news"><span class="label">时事新闻</span><span class="value active">已选</span></div>
-  <div class="row" data-setting="topic" data-value="drama"><span class="label">美剧英剧精读</span><span class="value active">已选</span></div>
+  <div class="row" data-setting="topic" data-value="topics"><span class="label">话题闲聊</span><span class="value active">已选</span></div>
   <div class="row" data-setting="topic" data-value="podcast"><span class="label">播客访谈</span><span class="value active">已选</span></div>
   <div class="row" data-setting="topic" data-value="story"><span class="label">有声故事</span><span class="value active">已选</span></div>
   <div class="topic-note">播客访谈、有声故事和时事新闻一样，联网时自动更新，无需改代码</div>
@@ -1182,23 +1230,23 @@
       zh:'图书馆增加免费有声书服务。全国各地的公共图书馆正在扩展免费有声书服务。从本月起，持借书证的读者可以通过一个新 app 同时借阅十本有声书，大多数热门书目无需等待名单。该项目由政府三百万美元拨款资助。图书馆官员表示，他们注意到去年有声书借阅量增长了百分之二十，年轻读者尤其明显。这个 app 还允许读者调节朗读音速、设置睡眠定时。有评论担心这项服务会减少纸质书借阅，但早期数据显示，有声书用户借阅的纸质书也比以前更多。该服务对所有图书馆会员免费开放。'},
 
     /* === 影视精读（剧本对白） === */
-    { id:'f1', topic:'drama', title:'Friends: The One with the Late Text', audio:'assets/f1.m4a', isAudio:true,
+    { id:'f1', topic:'topics', title:'Friends: The One with the Late Text', audio:'assets/f1.m4a', isAudio:true,
       en:"Scene: A coffee shop. RACHEL, ROSS, and MONICA are sitting at a table. RACHEL: Okay, tell me again why you didn't text her back. ROSS: Because! If I text her back right away, she's gonna think I was sitting by my phone. MONICA: You were sitting by your phone. ROSS: That is not the point! The point is, I need to play it cool. RACHEL: Ross, you played cool for three days. She probably thinks you're not interested. ROSS: Wait, is that bad? MONICA: Yes, that is bad. ROSS: Okay, okay, what do I do? RACHEL: You text her. Right now. Say, hey, sorry I missed your call, I was in a meeting. ROSS: That's a lie. I was watching old cartoons. MONICA: And that is exactly why we don't tell her the truth.",
       zh:'老友记：未回短信那一集。场景：咖啡馆。瑞秋、罗斯、莫妮卡坐在桌边。瑞秋：好，再跟我说一遍，你为什么不回她短信。罗斯：因为！我要是马上回，她会觉得我一直守着手机。莫妮卡：你确实一直守着手机。罗斯：重点不是这个！重点是，我得装得淡定一点。瑞秋：罗斯，你已经淡定了三天了，她可能觉得你没意思。罗斯：等等，那很糟吗？莫妮卡：对，非常糟。罗斯：好吧，我该怎么办？瑞秋：现在就给她发短信，说：嘿，抱歉没接到电话，刚才在开会。罗斯：那是撒谎，我在看老动画片。莫妮卡：所以才说不能跟她说实话。'},
-    { id:'f2', topic:'drama', title:'The Office: The Job Interview', audio:'assets/f2.m4a', isAudio:true,
+    { id:'f2', topic:'topics', title:'The Office: The Job Interview', audio:'assets/f2.m4a', isAudio:true,
       en:"MICHAEL: Hello! And welcome to Dunder Mifflin. I'm Michael Scott, regional manager. INTERVIEWER: Nice to meet you, Mr. Scott. Thank you for making time. MICHAEL: Oh, please, call me Michael. So, tell me about yourself. INTERVIEWER: Well, I've been in sales for eight years. MICHAEL: Eight years! That's longer than I've been alive. Just kidding. INTERVIEWER: ...MICHAEL: Okay, serious question. Where do you see yourself in five years? INTERVIEWER: I'd like to be running a small team, maybe in a regional role. MICHAEL: A regional role. Like... mine? INTERVIEWER: I didn't mean it that way. MICHAEL: It's okay. I respect ambition. You know what, you're hired. INTERVIEWER: Just like that? MICHAEL: Hey, I know talent when I see it. Welcome to the team.",
       zh:'办公室：求职面试。迈克尔：你好！欢迎来到 Dundler Mifflin，我是地区经理迈克尔·斯科特。面试官：很高兴见到您，斯科特先生，感谢您拨冗。迈克尔：请叫我迈克尔。跟我说说你自己。面试官：我做销售八年了。迈克尔：八年！比我活的时间都长。开玩笑的。面试官：……迈克尔：好，正经问题。五年后你想做什么？面试官：我想带一个小团队，也许做个地区负责人。迈克尔：地区负责人。比如……我的位置？面试官：我不是那个意思。迈克尔：没关系，我欣赏有野心的人。这样吧，你被录用了。面试官：就这么定了？迈克尔：我一眼就能看出人才。欢迎加入。'},
-    { id:'f3', topic:'drama', title:'Sherlock: The First Meeting', audio:'assets/f3.m4a', isAudio:true,
+    { id:'f3', topic:'topics', title:'Sherlock: The First Meeting', audio:'assets/f3.m4a', isAudio:true,
       en:"JOHN: So, this all seems rather fantastic. You think you can tell all that just by looking at me? SHERLOCK: I can tell you were in Afghanistan. Or Iraq. The pain in your leg says army. The limp is psychosomatic, by the way. JOHN: How on earth could you possibly know that? SHERLOCK: I observe. Most people don't. Your haircut is military. Your posture is military. But you hold yourself like you're in pain. You look down when you walk, not because of the leg, but because you're thinking. JOHN: That's impossible. SHERLOCK: And you have a phone. An expensive phone. But you're clearly not wealthy. Someone gave it to you. JOHN: My sister gave it to me. SHERLOCK: Ah. Estranged. You check it constantly, hoping for a message that will never come. JOHN: ...We should get coffee sometime.",
       zh:'神探夏洛克：初次见面。约翰：这一切也太离谱了。你觉得光看我就能知道这些？夏洛克：我能看出来你在阿富汗待过，或者伊拉克。你腿疼说明你当过兵。顺便说一句，那是心理性的跛行。约翰：你到底怎么知道的？夏洛克：我观察，大多数人不会。你的发型是军人的，站姿也是，但你走路的样子像是在忍痛。你走路时低头，不是因为腿，而是因为在思考。约翰：这不可能。夏洛克：你还有一部手机。很贵的手机，但你显然不富裕，是别人给你的。约翰：我姐姐给的。夏洛克：啊。关系疏远。你不停看手机，希望收到一条永远不会来的消息。约翰：……我们找个时间喝杯咖啡吧。'},
-    { id:'f4', topic:'drama', title:'Modern Family: Family Dinner', audio:'assets/f4.m4a', isAudio:true,
+    { id:'f4', topic:'topics', title:'Modern Family: Family Dinner', audio:'assets/f4.m4a', isAudio:true,
       en:"CLAIRE: Who wants more lasagna? PHIL: I do, but the kids said if I have a third piece they're taking my credit card. LUKE: Dad, you had two plates already. ALEX: Actually, that's three. PHIL: Three? I only remember two. CLAIRE: You have a problem, Phil. PHIL: I have a healthy appreciation for Italian cuisine. LUKE: Can I be excused? I have homework. CLAIRE: You just sat down. Finish your vegetables. LUKE: But they're green. CLAIRE: That's the point. MITCH: Hey, everybody. Sorry we're late. Cam got stuck at the petting zoo. CAM: A goat ate my tie. I had to rescue it. LILY: We brought doughnuts. CLAIRE: Doughnuts? Before dinner? CAM: They're a peace offering.",
       zh:'摩登家庭：家庭晚餐。克莱尔：谁还要千层面？菲尔：我要，但孩子们说我要再吃一块就收走我的信用卡。卢克：爸，你已经吃了两盘了。亚历克斯：其实是三盘。菲尔：三盘？我只记得两盘。克莱尔：菲尔，你有问题。菲尔：我只是对意大利菜有健康的欣赏。卢克：我能离席吗？我有作业。克莱尔：你刚坐下，把菜吃完。卢克：可它们是绿的。克莱尔：所以才让你吃。米奇：大家好，抱歉来晚了，小卡在动物园被卡住了。小卡：一只山羊吃了我的领带，我得去救它。莉莉：我们带了甜甜圈。克莱尔：晚饭前吃甜甜圈？小卡：这是赔礼。'}
   ];
 
   /* ---------- 状态 ---------- */
   let state = {
-    settings: { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','drama','podcast','story'] },
+    settings: { level: 'medium', subtitle: 'bilingual', speed: 1.0, topics: ['daily','news','topics','podcast','story'] },
     playlist: [], currentIndex: 0,
     history: {}, offline: false,
     playing: false, paused: false,
@@ -1228,11 +1276,15 @@
     { id:'potside', topic:'podcast', label:'Potside Chats 圆桌', url:'https://www.ximalaya.com/album/86255608.xml',
       zh:'（中国日报外籍记者圆桌谈）', take:2 },
     { id:'grimm', topic:'story', label:'格林童话英文原版', url:'https://www.ximalaya.com/album/56080938.xml',
-      zh:'（英文原版有声故事）', take:3 }
+      zh:'（英文原版有声故事）', take:3 },
+    { id:'xm_english', topic:'daily', label:'日常话题闲聊', url:'https://www.ximalaya.com/album/75149630.xml',
+      zh:'（英语生活话题自由谈 · 原声）', take:4 },
+    { id:'fluency30', topic:'topics', label:'30 天英语流利计划', url:'https://feeds.redcircle.com/5c386ad6-437f-427e-a1df-193acbae3422',
+      zh:'（A1–B2 分级听力故事）', take:3 }
   ];
-  const ALL_TOPICS = ['daily','news','drama','podcast','story'];
-  const TOPIC_NAME = { daily:'日常', news:'新闻', drama:'影视', podcast:'播客', story:'故事' };
-  const TOPIC_COLOR = { daily:'#2D5A3D', news:'#B8923A', drama:'#6B3A6B', podcast:'#3A5B8C', story:'#8C4A3A' };
+  const ALL_TOPICS = ['daily','news','topics','podcast','story'];
+  const TOPIC_NAME = { daily:'日常', news:'新闻', topics:'话题', podcast:'播客', story:'故事' };
+  const TOPIC_COLOR = { daily:'#2D5A3D', news:'#B8923A', topics:'#6B3A6B', podcast:'#3A5B8C', story:'#8C4A3A' };
 
   /* ---------- 账号存储 ---------- */
   function loadAccounts(){ return loadLSRaw('hl_accounts', []); }
@@ -1472,27 +1524,16 @@
 
   function buildPlaylist(){
     const topics = state.settings.topics;
-    const heard = heardIds();
     const done = doneIds();
-    // 内置材料：没听过的排前面，听过的沉到后面（便于复习）
-    const dailyDrama = MATERIALS.filter(m => topics.includes(m.topic));
-    dailyDrama.sort((a, b) => (heard.has(a.id) ? 1 : 0) - (heard.has(b.id) ? 1 : 0));
-    // 实时资料（新闻/播客/故事）：优先今日拉取，其次旧缓存
-    let live = [];
-    if (state.liveItems && state.liveItems.length) {
-      live = state.liveItems.filter(m => topics.includes(m.topic));
-    }
-    if (topics.includes('news') && !live.some(m => m.topic === 'news')) {
-      live = live.concat(MATERIALS.filter(m => m.topic === 'news'));
-    }
-    // 听完的实时资料自动换掉；某主题全部听完时保留原样循环，避免列表空
+    const bad = state.badIds || {};
+    // 听力资料全部来自线上引入音频（不再使用预录的内部材料）
+    let live = (state.liveItems || []).filter(m => topics.includes(m.topic) && !bad[m.id]);
+    // 听完的自动换掉；某主题全部听完时保留原样循环，避免列表空
     if (live.length) {
       const fresh = live.filter(m => !done.has(m.id));
       live = fresh.length ? fresh : live;
     }
-    // 真实音频排前面：iOS 上 audio 元素播放最稳定，一打开就有声
-    state.playlist = live.concat(dailyDrama);
-    if (!state.playlist.length) state.playlist = MATERIALS.slice();
+    state.playlist = live;
     state.currentIndex = 0;
     renderLib();
   }
@@ -1607,7 +1648,11 @@
 
   /* ---------- 播放控制（音频 / TTS 双模式） ---------- */
   function togglePlay(){
-    if (!state.playlist.length) return;
+    if (!state.playlist.length) {
+      toast('资料还没加载好，正在获取…');
+      if (state.activeId) fetchLiveAll(false, allowAudioPrecache());
+      return;
+    }
     const ep = state.playlist[state.currentIndex];
     if (ep && ep.isAudio) {
       const a = $('audioEl');
@@ -1710,6 +1755,32 @@
     }
   }
 
+  // 某段音频加载/播放失败：标记为坏条目、自动跳到下一条（连续多段失败则停下提示）
+  function onAudioFail(){
+    const bad = state.playlist[state.currentIndex];
+    if (!bad || !bad.isAudio) return;
+    state.badIds = state.badIds || {};
+    state.badIds[bad.id] = 1;
+    state.failStreak = (state.failStreak || 0) + 1;
+    state.liveItems = (state.liveItems || []).filter(m => m.id !== bad.id);
+    rebuildFromBad();
+    if (state.failStreak >= 3) {
+      state.playing = false; updatePlayIcon(false);
+      toast('多段音频加载失败，请检查网络后点「更新听力资料」');
+      return;
+    }
+    toast('这段放不出来，已跳过：' + (bad.title || '').substring(0, 18));
+    setTimeout(()=>{ if (!state.playing) playEpisode(Math.min(state.currentIndex, state.playlist.length - 1)); }, 900);
+  }
+  // 剔除坏条目后重建播放列表，尽量保持当前索引不越界
+  function rebuildFromBad(){
+    const keep = state.currentIndex;
+    buildPlaylist();
+    state.currentIndex = Math.min(keep, state.playlist.length - 1);
+    renderLib();
+    renderNowPlaying();
+  }
+
   function playEpisode(idx, opts){
     opts = opts || {};
     const ep = state.playlist[idx];
@@ -1727,6 +1798,7 @@
 
     if (ep.isAudio) {
       // 真实音频（CGTN / 内置录制）
+      state.audioLoading = true;
       a.src = ep.audio;
       a.playbackRate = state.settings.speed;
       a.load();
@@ -1738,13 +1810,11 @@
       }
       a.play().then(()=>{
         state.playing = true; state.paused = false;
+        state.failStreak = 0; state.audioLoading = false;
         updatePlayIcon(true);
         startTick();
         renderResume();
-      }).catch(()=>{
-        toast('音频加载失败，跳过');
-        setTimeout(()=>{ if (!state.playing) next(); }, 1200);
-      });
+      }).catch(()=>{ onAudioFail(); });
       renderNowPlaying();
       renderTranscript();
       return;
@@ -1824,6 +1894,8 @@
       ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
       : '<polygon points="6,4 20,12 6,20"/>';
     $('playBtn').classList.toggle('playing', playing);
+    const runner = $('runner');
+    if (runner) runner.classList.toggle('running', !!playing);
   }
 
   function updateProgress(){
@@ -1961,7 +2033,7 @@
     $('controlsRow').style.visibility='visible';
     $('npTitle').textContent = ep.title;
     const tag = $('npTag');
-    tag.textContent = ({daily:'日常',news:'新闻',drama:'影视',podcast:'播客',story:'故事'})[ep.topic] || '听力';
+    tag.textContent = TOPIC_NAME[ep.topic] || '听力';
     tag.className = 'tag ' + ep.topic;
     // 未播放且这条正是上次听到的 → 显示续听位置；否则显示第几段/来源
     const r = state.resume;
@@ -1970,7 +2042,7 @@
     const heardMark = lpP.done ? '✓ 已听完 · ' : (lpP.heard ? '✓ 已听 ' + Math.min(100,Math.round(lpP.pct*100)) + '% · ' : '');
     $('npDuration').textContent = (heardMark || '') + (isResumeTarget ? '上次听到 ' + fmtTime(r.time || 0) + ' · ' : '') + (state.currentIndex+1) + '/' + state.playlist.length;
     // 来源与发布时间
-    const srcLine = (ep.source || ('内置' + (TOPIC_NAME[ep.topic] || '材料'))) + (ep.date ? ' · 发布于 ' + ep.date : ' · 预录音频');
+    const srcLine = (ep.source || TOPIC_NAME[ep.topic] || '在线音频') + (ep.date ? ' · 发布于 ' + ep.date : ' · 在线音频');
     $('npSource').textContent = srcLine;
     $('progressWrap').style.display = 'block';
     const nextEp = state.playlist[(state.currentIndex+1) % state.playlist.length];
@@ -1991,12 +2063,16 @@
   function renderLib(){
     if (!$('libWrap')) return;
     $('libCount').textContent = '共 ' + state.playlist.length + ' 条';
-    const filters = [['all','全部'],['daily','日常'],['news','新闻'],['drama','影视'],['podcast','播客'],['story','故事']];
+    const filters = [['all','全部']].concat(ALL_TOPICS.map(t => [t, TOPIC_NAME[t]]));
     $('libChips').innerHTML = filters.map(([k,n]) =>
       '<button class="chip ' + (state.libFilter===k?'on':'') + '" data-topic="' + k + '">' + n + '</button>').join('');
     const rows = state.playlist.map((ep, i) => ({ep:ep, i:i}))
       .filter(x => state.libFilter === 'all' || x.ep.topic === state.libFilter);
-    if (!rows.length) { $('libList').innerHTML = '<div class="loading">这个主题暂时没有内容</div>'; return; }
+    if (!rows.length) {
+      $('libList').innerHTML = '<div class="loading">' +
+        (state.playlist.length ? '这个主题暂时没有内容，换个主题看看' : '资料还没加载，稍等几秒或点上方「更新听力资料」') + '</div>';
+      return;
+    }
     $('libList').innerHTML = rows.map(({ep, i}) => {
       const p = libProgress(ep);
       const color = TOPIC_COLOR[ep.topic] || '#2D5A3D';
@@ -2004,8 +2080,8 @@
       const right = p.done ? '<span class="li-pct done">已听完 ✓</span>'
                    : p.heard ? '<span class="li-pct">已听 ' + pct + '%</span>'
                    : '<span class="li-pct">未听</span>';
-      const srcTxt = ep.source || ('内置' + (TOPIC_NAME[ep.topic] || ''));
-      const dateTxt = ep.date ? (' · ' + ep.date) : (ep.source ? '' : ' · 预录');
+      const srcTxt = ep.source || TOPIC_NAME[ep.topic] || '在线音频';
+      const dateTxt = ep.date ? (' · ' + ep.date) : '';
       return '<button class="lib-item" data-idx="' + i + '">' +
         '<div class="li-top"><span class="li-dot" style="background:' + color + '"></span>' +
         '<span class="li-title">' + (ep.title || '未命名') + '</span>' + right + '</div>' +
@@ -2034,6 +2110,9 @@
     $('todaySeconds').textContent = min;
     const pct = Math.min(1, sec/DAILY_GOAL_SEC);
     $('ringFg').style.strokeDashoffset = RING_CIRC * (1-pct);
+    // 小狐狸沿环跑：位置 = 今日目标完成度（从顶部顺时针）
+    const runner = $('runner');
+    if (runner) runner.style.setProperty('--ang', (pct * 360).toFixed(1) + 'deg');
     if (sec >= DAILY_GOAL_SEC) {
       $('todayLabel').innerHTML = '<span class="goal-done">今日目标已达成</span> · 已听 '+min+' 分钟，继续保持';
     } else {
@@ -2069,7 +2148,7 @@
 
     let totalSec=0;
     let dailySecs=[];
-    let topicSecs={daily:0,news:0,drama:0,podcast:0,story:0};
+    let topicSecs={daily:0,news:0,topics:0,podcast:0,story:0};
     let episodeList=[];
     let metDays=0;
     let hasTopicSec=false;
@@ -2101,7 +2180,7 @@
         }
       });
     }
-    const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama+topicSecs.podcast+topicSecs.story || 1;
+    const topicTotal = ALL_TOPICS.reduce((sum,t)=>sum+(topicSecs[t]||0),0) || 1;
     const goalTotal = DAILY_GOAL_SEC * daysIn;
     const goalPct = Math.round(totalSec/goalTotal*100);
     const periodLabel = {week:'本周',month:'本月',year:'今年'}[period] || '';
@@ -2172,14 +2251,14 @@
       '<div class="topic-bar">'+
         '<div class="seg daily" style="width:'+(topicSecs.daily/topicTotal*100)+'%"></div>'+
         '<div class="seg news" style="width:'+(topicSecs.news/topicTotal*100)+'%"></div>'+
-        '<div class="seg drama" style="width:'+(topicSecs.drama/topicTotal*100)+'%"></div>'+
+        '<div class="seg topics" style="width:'+(topicSecs.topics/topicTotal*100)+'%"></div>'+
         '<div class="seg podcast" style="width:'+(topicSecs.podcast/topicTotal*100)+'%"></div>'+
         '<div class="seg story" style="width:'+(topicSecs.story/topicTotal*100)+'%"></div>'+
       '</div>'+
       '<div class="legend">'+
         '<span><span class="dot" style="background:#2D5A3D"></span>日常 '+fmtMin(topicSecs.daily)+'分</span>'+
         '<span><span class="dot" style="background:#B8923A"></span>新闻 '+fmtMin(topicSecs.news)+'分</span>'+
-        '<span><span class="dot" style="background:#6B3A6B"></span>影视 '+fmtMin(topicSecs.drama)+'分</span>'+
+        '<span><span class="dot" style="background:#6B3A6B"></span>话题 '+fmtMin(topicSecs.topics)+'分</span>'+
         '<span><span class="dot" style="background:#3A5B8C"></span>播客 '+fmtMin(topicSecs.podcast)+'分</span>'+
         '<span><span class="dot" style="background:#8C4A3A"></span>故事 '+fmtMin(topicSecs.story)+'分</span>'+
       '</div>'+
@@ -2200,17 +2279,15 @@
 
   /* ---------- 离线管理 ---------- */
   function renderOffline(){
-    const total = MATERIALS.length;
     const live = state.liveItems || [];
-    const nNews = live.filter(m => m.topic === 'news').length;
-    const nPod = live.filter(m => m.topic === 'podcast').length;
-    const nStory = live.filter(m => m.topic === 'story').length;
+    const topicRows = ALL_TOPICS.map(t => {
+      const n = live.filter(m => m.topic === t).length;
+      return '<div class="row"><span class="k">'+TOPIC_NAME[t]+'</span><span class="v">'+n+' 条</span></div>';
+    }).join('');
     $('offlineContent').innerHTML =
       '<div class="offline-card">'+
-        '<div class="row"><span class="k">内置材料</span><span class="v">'+total+' 段</span></div>'+
-        '<div class="row"><span class="k">实时新闻</span><span class="v">'+nNews+' 条</span></div>'+
-        '<div class="row"><span class="k">播客访谈</span><span class="v">'+nPod+' 集</span></div>'+
-        '<div class="row"><span class="k">有声故事</span><span class="v">'+nStory+' 篇</span></div>'+
+        '<div class="row"><span class="k">在线资料合计</span><span class="v">'+live.length+' 条</span></div>'+
+        topicRows +
         '<div class="row"><span class="k">更新于</span><span class="v">'+(state.liveDate? state.liveDate.slice(5) : '--')+'</span></div>'+
         '<div class="row"><span class="k">网络状态</span><span class="v">'+(state.offline?'离线':'在线')+'</span></div>'+
       '</div>'+
@@ -2388,7 +2465,11 @@
 
   function applyActiveAccount(){
     const d = curData();
-    state.settings = Object.assign({level:'medium',subtitle:'bilingual',speed:1.0,topics:['daily','news','drama','podcast','story']}, d.settings||{});
+    state.settings = Object.assign({level:'medium',subtitle:'bilingual',speed:1.0,topics:['daily','news','topics','podcast','story']}, d.settings||{});
+    // 旧版"影视"主题已替换为"话题"，迁移一次
+    if (state.settings.topics && state.settings.topics.indexOf('drama') >= 0) {
+      state.settings.topics = state.settings.topics.map(t => t === 'drama' ? 'topics' : t);
+    }
     state.history = d.history||{};
     // 实时资料：新版 liveCache；旧账号兼容 newsCache（旧新闻归为 news）
     if (d.liveCache && d.liveCache.items) {
@@ -2403,7 +2484,7 @@
     state.resume = d.resume || null;
     state.lp = d.lp || {};
     state.settings.speed = state.settings.speed || 1.0;
-    state.settings.topics = state.settings.topics || ['daily','news','drama','podcast','story'];
+    state.settings.topics = state.settings.topics || ['daily','news','topics','podcast','story'];
     buildPlaylist();
     // 刷新/切账号后定位到上次听的条目
     locateResume();
@@ -2544,6 +2625,11 @@
         saveResume();
       }
     });
+    a.addEventListener('error', () => {
+      if (!state.audioLoading) return;   // 只在本次加载期间处理，避免切歌误报
+      state.audioLoading = false;
+      onAudioFail();
+    });
     a.addEventListener('timeupdate', updateProgress);
     a.addEventListener('ended', () => {
       stopTick(); state.playing = false; updatePlayIcon(false);
@@ -2612,7 +2698,7 @@
       if (!state.activeId) { toast('请先创建账号'); return; }
       if (confirm('确定清除当前账号的所有播放记录和设置吗？')) {
         state.history = {};
-        state.settings = { level:'medium', subtitle:'bilingual', speed:1.0, topics:['daily','news','drama','podcast','story'] };
+        state.settings = { level:'medium', subtitle:'bilingual', speed:1.0, topics:['daily','news','topics','podcast','story'] };
         state.liveItems = []; state.liveDate = '';
         const d = curData();
         d.history = {}; d.settings = {}; d.liveCache = null;
