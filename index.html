@@ -77,6 +77,7 @@
     position: relative;
     width: 240px; height: 240px;
     margin: 30px 0 24px;
+    overflow: visible;
   }
   .circle-wrap svg.ring {
     width: 100%; height: 100%;
@@ -102,28 +103,72 @@
     left: 50%; top: 50%;
     width: 0; height: 0;
     --ang: 0deg;
-    transform: rotate(var(--ang)) translateY(-114px) rotate(90deg);
+    transform: rotate(var(--ang)) translateY(-142px);
     transition: transform 0.45s cubic-bezier(.35,0,.25,1);
     pointer-events: none;
     z-index: 3;
   }
-  .runner svg {
+  /* 狐狸直接挂在环外侧，不做底托 */
+  .runner .fox-chip {
     position: absolute;
-    width: 30px; height: 26px;
-    left: -15px; top: -13px;
-    color: var(--topic, var(--ink));
-    overflow: visible;
+    width: 0; height: 0;
+    left: 0; top: 0;
+    display: flex; align-items: center; justify-content: center;
   }
-  .runner.running svg { animation: fox-run .55s ease-in-out infinite; }
+  .runner .fox-chip .fox-emoji {
+    font-size: 22px;
+    line-height: 1;
+    transform: translateY(-11px); /* 上移半格，让视觉中心对准环 */
+  }
+  .runner.running .fox-chip { animation: fox-run .55s ease-in-out infinite; }
   @keyframes fox-run {
     0%,100% { transform: translateY(0) scaleX(1); }
     50%     { transform: translateY(-2.5px) scaleX(1.03); }
   }
+  /* 跑满一圈（今日目标达成）：小狐狸跃起淡出，跑进青山里 */
+  .runner.arrived .fox-chip { animation: fox-arrive .55s cubic-bezier(.4,0,.3,1) forwards; }
+  @keyframes fox-arrive {
+    0%   { transform: translateY(0) scale(1); opacity: 1; }
+    40%  { transform: translateY(-8px) scale(1.06); opacity: 1; }
+    100% { transform: translateY(-2px) scale(.45); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .runner.running .fox-chip, .runner.arrived .fox-chip { animation: none; }
+    .runner.arrived .fox-chip { opacity: 0; }
+  }
+  /* 达标后在环顶立起的小旗（狐狸跑完跑进山里的落点） */
+  .flag {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 0; height: 0;
+    transform: translateY(-142px);
+    opacity: 0;
+    transition: opacity .35s ease, transform .35s cubic-bezier(.34,1.3,.64,1);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .flag.show { opacity: 1; transform: translateY(-145px); }
+  .flag .flag-chip {
+    position: absolute;
+    width: 30px; height: 30px;
+    left: -15px; top: -15px;
+    border-radius: 50%;
+    background: #FFFDF8;
+    box-shadow: 0 0 0 1.5px var(--topic, var(--accent)), 0 2px 5px rgba(0,0,0,.16);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flag .flag-chip svg {
+    width: 17px; height: 21px;
+    color: var(--topic, var(--accent));
+  }
   /* 环下连绵青山 */
   .hills { width: 208px; height: 34px; margin: -14px 0 6px; }
   .hills svg { width: 100%; height: 100%; display: block; }
-  .hills .h-far  { fill: var(--topic, var(--accent)); opacity: .14; }
-  .hills .h-near { fill: var(--topic, var(--accent)); opacity: .26; }
+  .hills .h-far  { fill: var(--topic, var(--accent)); opacity: .14; transition: opacity .7s ease; }
+  .hills .h-near { fill: var(--topic, var(--accent)); opacity: .26; transition: opacity .7s ease; }
+  /* 达标后青山亮起来，接住跑完的小狐狸 */
+  .hills.lit .h-far  { opacity: .24; }
+  .hills.lit .h-near { opacity: .40; }
   .play-btn {
     position: absolute;
     inset: 20px;
@@ -1021,16 +1066,15 @@
       <circle class="ring-fg" id="ringFg" cx="110" cy="110" r="105"/>
     </svg>
     <div class="runner" id="runner" aria-hidden="true">
-      <svg viewBox="0 0 28 24">
-        <path d="M7.2 15.2 C 3.4 15.4 1.2 12.4 1.9 9.2 C 3.9 11.4 5.8 11.6 7.4 12.2 Z" fill="currentColor"/>
-        <ellipse cx="12.6" cy="13.6" rx="6.1" ry="4.1" fill="currentColor"/>
-        <circle cx="19.2" cy="10.2" r="3.5" fill="currentColor"/>
-        <path d="M16.9 7.8 L 16.1 3.9 L 19.4 7.1 Z" fill="currentColor"/>
-        <path d="M20.4 7.4 L 21.6 3.6 L 22.6 7.7 Z" fill="currentColor"/>
-        <path d="M9.4 17.2 L 9 20.9 M13.1 17.5 L 12.9 20.9 M16.2 17 L 16.4 20.3"
-              stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-        <circle cx="20.4" cy="9.7" r=".95" fill="#fff"/>
-      </svg>
+      <div class="fox-chip"><span class="fox-emoji">🦊</span></div>
+    </div>
+    <div class="flag" id="flag" aria-hidden="true">
+      <div class="flag-chip">
+        <svg viewBox="0 0 18 24">
+          <path d="M4 23 L4 2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+          <path d="M4.8 2.4 L15 6.2 L4.8 10 Z" fill="currentColor"/>
+        </svg>
+      </div>
     </div>
     <button class="play-btn" id="playBtn" aria-label="播放/暂停">
       <svg id="playIcon" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg>
@@ -2110,9 +2154,16 @@
     $('todaySeconds').textContent = min;
     const pct = Math.min(1, sec/DAILY_GOAL_SEC);
     $('ringFg').style.strokeDashoffset = RING_CIRC * (1-pct);
-    // 小狐狸沿环跑：位置 = 今日目标完成度（从顶部顺时针）
+    // 小狐狸沿环跑：位置 = 今日目标完成度（从顶部顺时针），跑满一圈就跃起消失
     const runner = $('runner');
-    if (runner) runner.style.setProperty('--ang', (pct * 360).toFixed(1) + 'deg');
+    if (runner) {
+      runner.style.setProperty('--ang', (pct * 360).toFixed(1) + 'deg');
+      runner.classList.toggle('arrived', pct >= 1);
+    }
+    const hills = document.querySelector('.hills');
+    if (hills) hills.classList.toggle('lit', pct >= 1);
+    const flag = $('flag');
+    if (flag) flag.classList.toggle('show', pct >= 1);
     if (sec >= DAILY_GOAL_SEC) {
       $('todayLabel').innerHTML = '<span class="goal-done">今日目标已达成</span> · 已听 '+min+' 分钟，继续保持';
     } else {
