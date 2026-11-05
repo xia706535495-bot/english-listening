@@ -1055,6 +1055,7 @@
     history: {}, offline: false,
     playing: false, paused: false,
     wordIdx: 0, totalWords: 0, tickTimer: null,
+    posEp: '', posTime: -1,
     accounts: [], activeId: null,
     liveItems: [], liveDate: '',
     resume: null
@@ -1098,6 +1099,8 @@
   function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function fmtTime(sec){ if(!sec||isNaN(sec))return '0:00'; sec=Math.floor(sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
   function fmtMin(sec){ return Math.round(sec/60); }
+  // 已听条目时长：新数据存秒（v:2），旧数据存分钟
+  function itemSec(it){ if(!it) return 0; return it.v===2 ? (it.sec||0) : (it.sec||0)*60; }
   function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
   function loadLS(k,d){ return loadLSRaw('hl_'+k, d); }
   function saveLS(k,v){ saveLSRaw('hl_'+k, v); }
@@ -1252,10 +1255,20 @@
     Object.keys(state.history||{}).forEach(k => (state.history[k].items||[]).forEach(it => set.add(it.id)));
     return set;
   }
+  // 完整听完的条目 id（只有这些会在下次打开时被换成新内容）
+  function doneIds(){
+    const set = new Set();
+    Object.keys(state.history||{}).forEach(k => (state.history[k].items||[]).forEach(it => { if (it.done) set.add(it.id); }));
+    return set;
+  }
 
   function buildPlaylist(){
     const topics = state.settings.topics;
+    const heard = heardIds();
+    const done = doneIds();
+    // 内置材料：没听过的排前面，听过的沉到后面（便于复习）
     const dailyDrama = MATERIALS.filter(m => topics.includes(m.topic));
+    dailyDrama.sort((a, b) => (heard.has(a.id) ? 1 : 0) - (heard.has(b.id) ? 1 : 0));
     // 实时资料（新闻/播客/故事）：优先今日拉取，其次旧缓存
     let live = [];
     if (state.liveItems && state.liveItems.length) {
@@ -1264,14 +1277,14 @@
     if (topics.includes('news') && !live.some(m => m.topic === 'news')) {
       live = live.concat(MATERIALS.filter(m => m.topic === 'news'));
     }
+    // 听完的实时资料自动换掉；某主题全部听完时保留原样循环，避免列表空
+    if (live.length) {
+      const fresh = live.filter(m => !done.has(m.id));
+      live = fresh.length ? fresh : live;
+    }
     // 真实音频排前面：iOS 上 audio 元素播放最稳定，一打开就有声
     state.playlist = live.concat(dailyDrama);
     if (!state.playlist.length) state.playlist = MATERIALS.slice();
-    // 未听过的内容排前面（已听过的沉到后面，下次优先推荐新内容）
-    const heard = heardIds();
-    if (heard.size) {
-      state.playlist.sort((a, b) => (heard.has(a.id) ? 1 : 0) - (heard.has(b.id) ? 1 : 0));
-    }
     state.currentIndex = 0;
   }
 
@@ -1498,6 +1511,8 @@
     try { synth.cancel(); } catch(e){}
     const a = $('audioEl');
     a.pause(); a.removeAttribute('src'); a.load();
+    // 切换条目后重新校准计时基准，避免把跳段误算成听力时长
+    state.posEp = ''; state.posTime = -1;
 
     if (ep.isAudio) {
       // 真实音频（CGTN / 内置录制）
@@ -1653,23 +1668,46 @@
   /* ---------- 播放计时 ---------- */
   function startTick(){
     stopTick();
+    let saveAcc = 0;
     state.tickTimer = setInterval(()=>{
       if (!state.playing || state.paused) return;
       const today = todayStr();
       if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
-      state.history[today].seconds += 1;
-      if (state.history[today].seconds % 30 === 0) {
-        // 听满 30 秒即标记"已听过"（无需听完一整段）
-        const ep = state.playlist[state.currentIndex];
-        const a = $('audioEl');
-        if (ep && ep.isAudio && a.currentTime > 30 && !state.history[today].items.find(i => i.id === ep.id)) {
-          state.history[today].items.push({ id:ep.id, topic:ep.topic, title:ep.title, sec:Math.round(a.currentTime/60)||1, done:false });
-          renderNowPlaying();
+      const ep = state.playlist[state.currentIndex];
+      const a = $('audioEl');
+      // 按音频真实播放进度累计（iPhone 切后台/锁屏时定时器会节流，用进度差补回）
+      let add = 1;
+      let audioPos = 0;
+      if (ep && ep.isAudio && isFinite(a.currentTime)) {
+        audioPos = a.currentTime;
+        if (state.posEp === ep.id && state.posTime >= 0) {
+          const d = audioPos - state.posTime;
+          if (d > 0 && d < 10) add = d;                        // 正常播放（含倍速）
+          else if (d >= 10 && d < 3600) add = Math.min(d, 600); // 后台节流恢复：补回
+          else add = 0;                                         // 回退/拖动跳转不计
+        } else {
+          add = 0;  // 刚切换条目或刚拖动，仅对齐位置
         }
-        saveCurData({...curData(), history: state.history});
+        state.posEp = ep.id;
+        state.posTime = audioPos;
       }
-      // 每 5 秒存一次断点位置
-      if (state.history[today].seconds % 5 === 0) saveResume();
+      state.history[today].seconds += add;
+      // 按主题累计实际听力秒数（成绩单的主题分布与总时长同口径）
+      if (ep && ep.topic) {
+        if (!state.history[today].topic) state.history[today].topic = {};
+        state.history[today].topic[ep.topic] = (state.history[today].topic[ep.topic] || 0) + add;
+      }
+      saveAcc += add;
+      // 听满 30 秒即标记"已听过"（无需听完一整段）
+      if (ep && ep.isAudio && audioPos > 30 && !state.history[today].items.find(i => i.id === ep.id)) {
+        state.history[today].items.push({ id:ep.id, topic:ep.topic, title:ep.title, sec:Math.round(audioPos)||1, done:false, v:2 });
+        renderNowPlaying();
+      }
+      if (saveAcc >= 10) {
+        saveAcc = 0;
+        saveCurData({...curData(), history: state.history});
+        saveResume();
+      }
       renderToday();
     }, 1000);
   }
@@ -1679,9 +1717,15 @@
     const ep = state.playlist[state.currentIndex];
     const today = todayStr();
     if (!state.history[today]) state.history[today] = { seconds:0, items:[] };
-    if (!state.history[today].items.find(i => i.id === ep.id)) {
-      const sec = ep.isAudio ? Math.round(($('audioEl').duration||0)/60) : estDuration(ep);
-      state.history[today].items.push({ id:ep.id, topic:ep.topic, title:ep.title, sec:sec||1, done:true });
+    const sec = ep.isAudio ? Math.round($('audioEl').duration||0) : estDuration(ep);
+    const exist = state.history[today].items.find(i => i.id === ep.id);
+    if (exist) {
+      // 之前记为"听过一部分"，听完后补成已完成（下次打开会被换新）
+      exist.done = true;
+      exist.sec = Math.max(exist.v===2?(exist.sec||0):(exist.sec||0)*60, sec||1);
+      exist.v = 2;
+    } else {
+      state.history[today].items.push({ id:ep.id, topic:ep.topic, title:ep.title, sec:sec||1, done:true, v:2 });
     }
     saveCurData({...curData(), history: state.history});
   }
@@ -1754,6 +1798,7 @@
     let topicSecs={daily:0,news:0,drama:0,podcast:0,story:0};
     let episodeList=[];
     let metDays=0;
+    let hasTopicSec=false;
 
     for (let i=0;i<daysIn;i++){
       const d = new Date(start); d.setDate(start.getDate()+i);
@@ -1764,16 +1809,24 @@
         totalSec += rec.seconds||0;
         if ((rec.seconds||0) >= DAILY_GOAL_SEC) metDays++;
         (rec.items||[]).forEach(it => episodeList.push({...it, date:key}));
+        // 新数据：按主题累计的实际听力秒数（与总时长同口径）
+        if (rec.topic) {
+          Object.keys(rec.topic).forEach(t => {
+            if (topicSecs[t] !== undefined) { topicSecs[t] += rec.topic[t]; hasTopicSec = true; }
+          });
+        }
       }
     }
-    // 主题按该周期听过的条目累计
-    episodeList.forEach(it => {
-      if (it.topic && topicSecs[it.topic] !== undefined) topicSecs[it.topic] += (it.sec||180);
-      else {
-        const m = MATERIALS.find(x => x.id === it.id);
-        if (m && topicSecs[m.topic] !== undefined) topicSecs[m.topic] += (it.sec||180);
-      }
-    });
+    // 旧数据兜底：没有按主题秒数记录时，按听过的条目时长估算
+    if (!hasTopicSec) {
+      episodeList.forEach(it => {
+        if (it.topic && topicSecs[it.topic] !== undefined) topicSecs[it.topic] += itemSec(it);
+        else {
+          const m = MATERIALS.find(x => x.id === it.id);
+          if (m && topicSecs[m.topic] !== undefined) topicSecs[m.topic] += itemSec(it);
+        }
+      });
+    }
     const topicTotal = topicSecs.daily+topicSecs.news+topicSecs.drama+topicSecs.podcast+topicSecs.story || 1;
     const totalMin = fmtMin(totalSec);
     const goalTotal = DAILY_GOAL_SEC * daysIn;
@@ -1854,7 +1907,7 @@
       html += '<div class="section-title">听过的内容</div>';
       episodeList.slice(0,20).forEach(it => {
         html += '<div class="episode-item"><div class="ep-title">'+(it.title||'未命名')+'</div>'+
-          '<div class="ep-meta"><span>'+it.date+'</span><span>'+fmtMin(it.sec||0)+' 分钟</span></div></div>';
+          '<div class="ep-meta"><span>'+it.date+'</span><span>'+fmtMin(itemSec(it))+' 分钟</span></div></div>';
       });
     } else {
       html += '<div class="section-title">听过的内容</div><div class="loading">'+periodLabel+'还没有播放记录</div>';
@@ -2039,6 +2092,7 @@
     saveCurData(d);
     // 停止播放
     stopTick(); state.playing = false; state.paused = false;
+    state.posEp = ''; state.posTime = -1;
     try { synth.cancel(); } catch(e){}
     const a = $('audioEl'); a.pause(); a.removeAttribute('src'); a.load();
     updatePlayIcon(false);
@@ -2138,6 +2192,7 @@
       const a = $('audioEl');
       if (ep && ep.isAudio && a.duration) {
         a.currentTime = pct * a.duration;
+        state.posTime = -1; // 拖动后重新校准，不把跳转差值算作听力时长
         updateProgress();
         saveResume();
         return true;
