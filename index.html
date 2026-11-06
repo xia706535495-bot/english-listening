@@ -75,10 +75,18 @@
     font-weight: 600;
   }
   .greet h1 {
-    font-size: 24px;
-    font-weight: 700;
-    margin-top: 6px;
-    letter-spacing: -0.3px;
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 8px;
+    letter-spacing: -0.2px;
+    line-height: 1.4;
+    color: var(--ink);
+    font-style: italic;
+  }
+  .greet .quote-zh {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
   }
   .greet .date {
     font-size: 13px;
@@ -335,8 +343,7 @@
   /* 进度条（当前音频） */
   .progress-wrap {
     width: 100%;
-    max-width: 420px;
-    margin-bottom: 12px;
+    margin-top: 14px;
   }
   .progress-bar {
     width: 100%;
@@ -1084,8 +1091,8 @@
 <div class="home" id="homeView">
   <div class="greet">
     <div class="eyebrow">Daily Listening</div>
-    <h1>早上好</h1>
-    <div class="date">11月6日 周五 · 今日已听 <span id="todaySeconds">0</span> 分钟</div>
+    <h1 id="dailyQuote">Practice makes perfect.</h1>
+    <div class="quote-zh" id="dailyQuoteZh">熟能生巧。</div>
   </div>
   <div class="circle-wrap">
     <svg class="ring" viewBox="0 0 220 220">
@@ -1133,23 +1140,22 @@
   </div>
 
   <div class="now-playing" id="nowPlayingCard" style="display:none">
-    <div class="np-label">正在播放</div>
+    <div class="np-label">Now Playing</div>
     <div class="np-title" id="npTitle">--</div>
     <div class="np-meta">
       <span class="tag" id="npTag">--</span>
       <span id="npDuration">--</span>
     </div>
     <div class="np-src" id="npSource">--</div>
-  </div>
-
-  <div class="progress-wrap" id="progressWrap" style="display:none">
-    <div class="progress-bar" id="progressBar">
-      <div class="progress-fill" id="progressFill"></div>
-      <div class="progress-thumb" id="progressThumb"></div>
-    </div>
-    <div class="progress-times">
-      <span id="curTime">0:00</span>
-      <span id="durTime">0:00</span>
+    <div class="progress-wrap" id="progressWrap" style="display:none">
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+        <div class="progress-thumb" id="progressThumb"></div>
+      </div>
+      <div class="progress-times">
+        <span id="curTime">0:00</span>
+        <span id="durTime">0:00</span>
+      </div>
     </div>
   </div>
 
@@ -1491,6 +1497,44 @@
     const now = new Date();
     const days = ['周日','周一','周二','周三','周四','周五','周六'];
     $('topDate').textContent = (now.getMonth()+1)+'月'+now.getDate()+'日 '+days[now.getDay()];
+
+    // 每日英语谚语（中英文对照）
+    const QUOTES = [
+      {en:'Practice makes perfect.', zh:'熟能生巧。'},
+      {en:'Where there is a will, there is a way.', zh:'有志者事竟成。'},
+      {en:'Every day is a new beginning.', zh:'每一天都是新的开始。'},
+      {en:'Small steps every day.', zh:'每天一小步，进步一大步。'},
+      {en:'Listen more, speak better.', zh:'多听才能说好。'},
+      {en:'A journey of a thousand miles begins with a single step.', zh:'千里之行，始于足下。'},
+      {en:'Better late than never.', zh:'迟做总比不做好。'},
+      {en:'Knowledge is power.', zh:'知识就是力量。'},
+      {en:'Time flies when you are having fun.', zh:'快乐时光总是飞逝。'},
+      {en:'The early bird catches the worm.', zh:'早起的鸟儿有虫吃。'},
+      {en:'Actions speak louder than words.', zh:'行动胜于言语。'},
+      {en:'When in Rome, do as the Romans do.', zh:'入乡随俗。'},
+      {en:'No pain, no gain.', zh:'不劳无获。'},
+      {en:'Slow and steady wins the race.', zh:'稳扎稳打，无往不胜。'},
+      {en:'A picture is worth a thousand words.', zh:'一图胜千言。'},
+      {en:'Birds of a feather flock together.', zh:'物以类聚，人以群分。'},
+      {en:'Don\'t judge a book by its cover.', zh:'不要以貌取人。'},
+      {en:'Every cloud has a silver lining.', zh:'黑暗中总有一线光明。'},
+      {en:'Fortune favors the bold.', zh:'勇者天佑。'},
+      {en:'Honesty is the best policy.', zh:'诚实为上策。'},
+      {en:'If at first you don\'t succeed, try, try again.', zh:'失败是成功之母。'},
+      {en:'Laughter is the best medicine.', zh:'笑是最好的药。'},
+      {en:'Money doesn\'t grow on trees.', zh:'钱来之不易。'},
+      {en:'Rome wasn\'t built in a day.', zh:'罗马不是一天建成的。'},
+      {en:'The grass is always greener on the other side.', zh:'这山望着那山高。'},
+      {en:'Two heads are better than one.', zh:'三个臭皮匠，顶个诸葛亮。'},
+      {en:'Better safe than sorry.', zh:'小心驶得万年船。'},
+      {en:'Don\'t put all your eggs in one basket.', zh:'不要孤注一掷。'},
+      {en:'Every dog has its day.', zh:'凡人都有得意日。'},
+      {en:'God helps those who help themselves.', zh:'天助自助者。'},
+      {en:'Well begun is half done.', zh:'好的开始是成功的一半。'}
+    ];
+    const qIdx = (now.getMonth() * 31 + now.getDate()) % QUOTES.length;
+    $('dailyQuote').textContent = QUOTES[qIdx].en;
+    $('dailyQuoteZh').textContent = QUOTES[qIdx].zh;
 
     buildPlaylist();
     // 刷新后定位到上次听的条目
