@@ -582,6 +582,56 @@
     font-weight: 600;
   }
 
+  /* 提升建议卡片 */
+  .advice-card {
+    background: var(--bg-soft);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 10px;
+  }
+  .advice-item {
+    display: flex;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .advice-item + .advice-item { border-top: 1px solid var(--line); }
+  .adv-num {
+    flex: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #FFF;
+    font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600;
+    margin-top: 1px;
+  }
+  .adv-text { color: var(--ink); }
+  .tips-card {
+    background: var(--bg-soft);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 10px;
+  }
+  .tip-item {
+    display: flex;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+  .tip-item + .tip-item { border-top: 1px solid var(--line); }
+  .tip-dot {
+    flex: none;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-top: 8px;
+  }
+
   /* 学习成绩单 */
   .report-card {
     background: #fff;
@@ -2303,7 +2353,12 @@
       });
     }
     const topicTotal = ALL_TOPICS.reduce((sum,t)=>sum+(topicSecs[t]||0),0) || 1;
-    const goalTotal = DAILY_GOAL_SEC * daysIn;
+    // 完成率按完整周期天数算（周7天/月当月天数/年365天），不是已过天数
+    let totalDays;
+    if (period === 'week') totalDays = 7;
+    else if (period === 'month') totalDays = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+    else totalDays = 365;
+    const goalTotal = DAILY_GOAL_SEC * totalDays;
     const goalPct = Math.round(totalSec/goalTotal*100);
     const periodLabel = {week:'本周',month:'本月',year:'今年'}[period] || '';
 
@@ -2312,10 +2367,11 @@
     if (period === 'year') {
       const monthSecs=[0,0,0,0,0,0,0,0,0,0,0,0];
       dailySecs.forEach((s,i)=>{ const d=new Date(start); d.setDate(start.getDate()+i); monthSecs[d.getMonth()]+=s; });
-      const maxBar = Math.max(...monthSecs, DAILY_GOAL_SEC);
+      const maxBar = Math.max(...monthSecs, DAILY_GOAL_SEC*30);
       barHtml = '<div class="days-grid">' + monthSecs.map((s,i)=>{
         const h=(s/maxBar*100).toFixed(1);
-        const met = s >= DAILY_GOAL_SEC*30;
+        const daysInMonth = new Date(now.getFullYear(), i+1, 0).getDate();
+        const met = s >= DAILY_GOAL_SEC*daysInMonth;
         return '<div class="day-col"><div class="bar '+(met?'met':'')+'" style="height:'+h+'%"></div><div class="day-label">'+(i+1)+'月</div></div>';
       }).join('') + '</div>';
     } else {
@@ -2387,15 +2443,87 @@
       '<div class="section-title">'+(period==='year'?'每月时长':'每日时长')+'</div>'+
       barHtml;
 
-    if (episodeList.length) {
-      html += '<div class="section-title">听过的内容</div>';
-      episodeList.slice(0,20).forEach(it => {
-        html += '<div class="episode-item"><div class="ep-title">'+(it.title||'未命名')+'</div>'+
-          '<div class="ep-meta"><span>'+it.date+'</span><span>'+fmtMin(itemSec(it))+' 分钟</span></div></div>';
-      });
+    // 生成提升建议（基于本周听力数据）
+    let adviceList = [];
+    const avgMin = avgSec/60;
+    const totalMin = totalSec/60;
+
+    // 建议1：时长是否达标
+    if (avgMin < 15) {
+      adviceList.push('日均听力 '+avgMin.toFixed(0)+' 分钟，距离 30 分钟目标还有差距。建议每天通勤或饭后加听 15 分钟，先把习惯立住。');
+    } else if (avgMin < 30) {
+      adviceList.push('日均 '+avgMin.toFixed(0)+' 分钟，已过半。再挤 15 分钟就能达标，试试睡前多听一集短内容。');
     } else {
-      html += '<div class="section-title">听过的内容</div><div class="loading">'+periodLabel+'还没有播放记录</div>';
+      adviceList.push('日均 '+avgMin.toFixed(0)+' 分钟，超过目标。保持节奏，可以开始挑战 1.25x 语速。');
     }
+
+    // 建议2：主题分布是否均衡
+    const topics = ['daily','news','topics','podcast','story'];
+    const topicPct = topics.map(t => ({t, pct: topicSecs[t]/topicTotal}));
+    const topTopic = topicPct.reduce((a,b)=>b.pct>a.pct?b:a);
+    const weakTopics = topicPct.filter(x => x.pct < 0.1 && x.pct > 0);
+    if (weakTopics.length > 0) {
+      const weakNames = weakTopics.map(x => TOPIC_NAME[x.t]).join('、');
+      adviceList.push('主题偏科：'+TOPIC_NAME[topTopic.t]+'占 '+(topTopic.pct*100).toFixed(0)+'%，'+weakNames+'偏少。建议每周至少听 2 条弱项主题，拓宽词汇面。');
+    } else if (topicPct.every(x => x.pct > 0.15)) {
+      adviceList.push('主题分布均衡，五类内容都有覆盖，听力面比较全。');
+    }
+
+    // 建议3：连续打卡
+    if (streak >= 5) {
+      adviceList.push('已连续打卡 '+streak+' 天，状态很好。别中断，周末也要保持 10 分钟最低量。');
+    } else if (streak >= 2) {
+      adviceList.push('连续打卡 '+streak+' 天，刚起步。固定一个时段（比如早起），更容易坚持。');
+    } else {
+      adviceList.push('还没有连续打卡记录。建议设个每天固定闹钟，哪怕只听 5 分钟。');
+    }
+
+    // 建议4：完成率低的额外建议
+    if (goalPct < 30 && period === 'week') {
+      adviceList.push('本周完成率偏低。别追求一次听很久，每天 10 分钟比周末猛听 2 小时更有效。');
+    }
+
+    html += '<div class="section-title">提升建议</div>';
+    html += '<div class="advice-card">';
+    adviceList.forEach((a,i) => {
+      html += '<div class="advice-item"><span class="adv-num">'+(i+1)+'</span><span class="adv-text">'+a+'</span></div>';
+    });
+    html += '</div>';
+
+    // 动态听力小技巧：根据数据从技巧池选 6 条
+    const tipPool = [
+      '精听+泛听结合：精听逐句听懂，泛听磨耳朵抓大意，比例约 3:7',
+      '影子跟读法：听完一句立刻跟读，模仿语音语调，练口语也练听力',
+      '先盲听再看文字：至少听 2 遍再看 transcript，不要边听边看',
+      '遇到生词先猜意思：根据上下文猜，不要立刻暂停查词',
+      '不要反复倒带：一遍听不懂就继续，整体理解比逐句抠更重要',
+      '听之前先看标题：预测内容方向，带着问题听更容易抓住重点'
+    ];
+    // 根据弱项主题加针对性技巧
+    if (topicSecs.news < topicTotal*0.1) tipPool.push('新闻类听力：先抓 5W1H（谁/什么/何时/何地/为什么），数字和地名重点记');
+    if (topicSecs.story < topicTotal*0.1) tipPool.push('故事类听力：注意人物关系和情节转折，听的时候在脑子里画人物图谱');
+    if (topicSecs.podcast < topicTotal*0.1) tipPool.push('播客类听力：口语化表达多，注意连读和缩写（gonna/wanna/kind of）');
+    if (topicSecs.daily < topicTotal*0.1) tipPool.push('日常类听力：跟读常用句型，比背单词更快提升实战对话');
+    if (topicSecs.topics < topicTotal*0.1) tipPool.push('话题类听力：注意说话人立场和态度词（however/actually/unfortunately）');
+    // 根据连续打卡加技巧
+    if (streak >= 5) tipPool.push('连续打卡 '+streak+' 天了，试试把语速调到 1.25x，挑战一下自己');
+    else if (streak === 0 && totalSec > 0) tipPool.push('刚起步阶段，不要追求听很久，每天固定 10 分钟比周末猛听更有效');
+    // 根据日均时长加技巧
+    if (avgSec < 600) tipPool.push('日均时长偏短，试试把音频当背景音，做饭走路时也放着');
+    // 选 6 条：弱项技巧优先，再补通用
+    const tips = [];
+    // 先加弱项主题技巧（如果有）
+    const weakTopicTips = tipPool.slice(6); // 后面的是针对性技巧
+    weakTopicTips.forEach(t => tips.push(t));
+    // 再补通用技巧到 6 条
+    for (let i = 0; tips.length < 6 && i < 6; i++) tips.push(tipPool[i]);
+    html += '<div class="section-title">听力提升小技巧</div>';
+    html += '<div class="tips-card">';
+    tips.forEach((t,i) => {
+      html += '<div class="tip-item"><span class="tip-dot"></span><span>'+t+'</span></div>';
+    });
+    html += '</div>';
+
     $('weeklyContent').innerHTML = html;
   }
 
@@ -2764,6 +2892,8 @@
       markEpisodeDone();
       renderLib();
       saveCurData({...curData(), history: state.history, lp: state.lp});
+      // 重建播放列表：去掉刚听完的，优先播未听内容
+      buildPlaylist();
       // 下一段开头作为新的续听点
       const nextIdx = (state.currentIndex + 1) % state.playlist.length;
       const nextEp = state.playlist[nextIdx];
