@@ -464,6 +464,19 @@
     z-index: 40;
   }
   .drawer-mask.open { opacity: 1; pointer-events: auto; }
+  .drawer-close {
+    position: absolute;
+    top: max(env(safe-area-inset-top), 16px);
+    right: 16px;
+    width: 36px; height: 36px;
+    border: none; background: var(--bg-soft);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .drawer-close:active { background: var(--line); }
+  .drawer-close svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
   .drawer {
     position: fixed;
     top: 0; right: 0; bottom: 0;
@@ -494,6 +507,7 @@
     background: var(--bg-soft);
     border-radius: 8px;
   }
+  .drawer .row:active { background: var(--bg-soft); }
   .drawer .row {
     display: flex;
     justify-content: space-between;
@@ -1251,6 +1265,9 @@
 <!-- 功能抽屉 -->
 <div class="drawer-mask" id="drawerMask"></div>
 <aside class="drawer" id="drawer">
+  <button class="drawer-close" id="drawerClose" aria-label="关闭">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
   <h3>我的账号</h3>
   <div class="row" id="openAccount"><span class="label">账号</span><span class="value" id="accountName">--</span></div>
 
@@ -2911,6 +2928,7 @@
     $('openDrawer').onclick = () => { $('drawer').classList.add('open'); $('drawerMask').classList.add('open'); };
     $('helpBtn').onclick = () => { toast('点中间大圆钮开始播放 · 点"更新听力资料"拉取最新内容 · 听完自动播下一集'); };
     $('drawerMask').onclick = closeDrawer;
+    $('drawerClose').onclick = closeDrawer;
     function closeDrawer(){ $('drawer').classList.remove('open'); $('drawerMask').classList.remove('open'); }
 
     document.querySelectorAll('.drawer .row[data-setting]').forEach(row => {
