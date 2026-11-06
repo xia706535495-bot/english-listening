@@ -2909,6 +2909,7 @@
     });
 
     $('openDrawer').onclick = () => { $('drawer').classList.add('open'); $('drawerMask').classList.add('open'); };
+    $('helpBtn').onclick = () => { toast('点中间大圆钮开始播放 · 点"更新听力资料"拉取最新内容 · 听完自动播下一集'); };
     $('drawerMask').onclick = closeDrawer;
     function closeDrawer(){ $('drawer').classList.remove('open'); $('drawerMask').classList.remove('open'); }
 
@@ -2942,7 +2943,7 @@
     $('openWeekly').onclick = () => { closeDrawer(); renderWeekly(); $('weeklyView').classList.add('open'); };
     $('periodTabs').querySelectorAll('button').forEach(b => b.onclick = () => { summaryPeriod = b.dataset.period; renderWeekly(); });
     $('openOffline').onclick = () => { closeDrawer(); renderOffline(); $('offlineView').classList.add('open'); };
-    $('updateBtn').onclick = () => { updateMaterials(); };
+    $('updateBtn').onclick = () => { toast('正在更新听力资料…'); updateMaterials(); };
     $('resumeBar').onclick = () => { startFromResume(); };
     document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => $(b.dataset.close).classList.remove('open'));
 
