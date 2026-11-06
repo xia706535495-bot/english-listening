@@ -12,17 +12,17 @@
 <style>
   /* ===== 设计 token ===== */
   :root {
-    --bg: #FAF9F6;
-    --bg-soft: #F1EFE9;
+    --bg: #F5F2EC;
+    --bg-soft: #EDE8DC;
     --ink: #1A1A1A;
-    --ink-soft: #6B6B6B;
-    --ink-faint: #A8A8A8;
-    --line: #E2DFD8;
+    --ink-soft: #8A8578;
+    --ink-faint: #B8B3A8;
+    --line: #E8E2D3;
     --accent: #2D5A3D;
-    --accent-soft: #E4EDE6;
-    --warn: #B85C3A;
-    --radius: 10px;
-    --shadow: 0 2px 12px rgba(0,0,0,0.04);
+    --accent-soft: #E6EDE8;
+    --warn: #C8553D;
+    --radius: 18px;
+    --shadow: 0 2px 10px rgba(26,26,26,0.05);
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -61,6 +61,30 @@
   }
   .icon-btn:active { background: var(--bg-soft); }
   .icon-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ===== 首页顶部问候 ===== */
+  .greet {
+    width: 100%;
+    padding: 8px 4px 0;
+  }
+  .greet .eyebrow {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .greet h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-top: 6px;
+    letter-spacing: -0.3px;
+  }
+  .greet .date {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+  }
 
   /* ===== 首页主区 ===== */
   .home {
@@ -108,18 +132,8 @@
     pointer-events: none;
     z-index: 3;
   }
-  /* 狐狸直接挂在环外侧，不做底托 */
-  .runner .fox-chip {
-    position: absolute;
-    width: 0; height: 0;
-    left: 0; top: 0;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .runner .fox-chip .fox-emoji {
-    font-size: 22px;
-    line-height: 1;
-    transform: translateY(-11px); /* 上移半格，让视觉中心对准环 */
-  }
+  /* 狐狸已移除，保留容器用于 JS 位置计算 */
+  .runner .fox-chip { display: none; }
   .runner.running .fox-chip { animation: fox-run .55s ease-in-out infinite; }
   @keyframes fox-run {
     0%,100% { transform: translateY(0) scaleX(1); }
@@ -174,12 +188,12 @@
     inset: 20px;
     border-radius: 50%;
     border: none;
-    background: var(--topic, var(--ink));
-    color: var(--bg);
+    background: var(--topic, var(--accent));
+    color: #FFF;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: transform 0.15s ease, background 0.25s;
-    box-shadow: var(--shadow);
+    box-shadow: 0 10px 28px rgba(45,90,61,.22);
   }
   .play-btn:active { transform: scale(0.96); }
   .play-btn svg { width: 48px; height: 48px; fill: currentColor; }
@@ -267,34 +281,42 @@
   .now-playing {
     width: 100%;
     max-width: 420px;
-    background: var(--bg-soft);
-    border-radius: var(--radius);
-    padding: 16px 18px;
+    background: linear-gradient(135deg, #2D5A3D 0%, #3D7A52 100%);
+    border-radius: 20px;
+    padding: 20px 20px 16px;
     margin-bottom: 16px;
+    color: #FFF;
+    box-shadow: 0 8px 20px rgba(45,90,61,.2);
   }
   .now-playing .np-label {
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: var(--ink-faint);
-    margin-bottom: 6px;
+    letter-spacing: 1.5px;
+    color: rgba(255,255,255,.7);
+    margin-bottom: 8px;
+    font-weight: 600;
   }
   .now-playing .np-title {
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.4;
-    margin-bottom: 6px;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.35;
+    margin-bottom: 8px;
+    letter-spacing: -0.2px;
   }
   .now-playing .np-meta {
     font-size: 13px;
-    color: var(--ink-soft);
+    color: rgba(255,255,255,.85);
     display: flex; gap: 10px; flex-wrap: wrap;
   }
   .now-playing .np-src {
-    margin-top: 5px;
+    margin-top: 6px;
     font-size: 11px;
-    color: var(--ink-faint);
+    color: rgba(255,255,255,.65);
     line-height: 1.5;
+  }
+  .now-playing .tag {
+    background: rgba(255,255,255,.2);
+    color: #FFF;
   }
   .tag {
     display: inline-block;
@@ -339,7 +361,7 @@
   .progress-fill {
     position: absolute;
     top: 0; left: 0; bottom: 0;
-    background: var(--ink);
+    background: #FFF;
     border-radius: 3px;
     width: 0%;
     transition: width 0.2s linear;
@@ -349,8 +371,8 @@
     top: 50%; left: 0;
     width: 20px; height: 20px;
     margin-left: -10px;
-    background: var(--ink);
-    border: 3px solid #fff;
+    background: #FFF;
+    border: 3px solid #2D5A3D;
     border-radius: 50%;
     box-shadow: 0 1px 4px rgba(0,0,0,0.25);
     transform: translateY(-50%) scale(0);
@@ -364,7 +386,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 12px;
-    color: var(--ink-faint);
+    color: rgba(255,255,255,.75);
     margin-top: 6px;
     font-variant-numeric: tabular-nums;
   }
@@ -1060,6 +1082,11 @@
 
 <!-- 首页 -->
 <div class="home" id="homeView">
+  <div class="greet">
+    <div class="eyebrow">Daily Listening</div>
+    <h1>早上好</h1>
+    <div class="date">11月6日 周五 · 今日已听 <span id="todaySeconds">0</span> 分钟</div>
+  </div>
   <div class="circle-wrap">
     <svg class="ring" viewBox="0 0 220 220">
       <circle class="ring-bg" cx="110" cy="110" r="105"/>
